@@ -32,8 +32,9 @@
 #include <gtk/gtk.h>
 
 #include "swell.h"
+#include "swell-internal.h"
 
-void BrowseFile_SetTemplate(int dlgid, DLGPROC dlgProc, struct SWELL_DialogResourceIndex *reshead)
+void BrowseFile_SetTemplate(const char* dlgid, DLGPROC dlgProc, struct SWELL_DialogResourceIndex *reshead)
 {
 }
 
@@ -57,85 +58,45 @@ char *BrowseForFiles(const char *text, const char *initialdir,
   return NULL;
 }
 
-
-static void messagebox_callback( GtkWidget *widget, gpointer   data )
-{
-  if (data) *(char*)data=1;
-  gtk_main_quit ();
-}
-
 int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
 {
-  char has_clicks[3]={0,};
-  int ids[3]={0,};
-  const char *lbls[3]={0,};
-  if (type == MB_OKCANCEL)
+  GtkWidget* dialog = gtk_message_dialog_new(NULL,//hwndParent->m_oswindow,
+					     GTK_DIALOG_DESTROY_WITH_PARENT,
+					     GTK_MESSAGE_OTHER,
+					     GTK_BUTTONS_NONE,
+					     text);
+  gtk_window_set_resizable(GTK_WINDOW(dialog), false);
+  gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_CENTER);
+  gtk_window_set_title(GTK_WINDOW(dialog), caption);
+
+  if (type == MB_OK)
   {
-    ids[0]=IDOK; lbls[0]="OK";
-    ids[1]=IDCANCEL; lbls[1]="Cancel";
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "OK", IDOK);
+  }	
+  else if (type == MB_OKCANCEL)
+  {
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "OK", IDOK, "Cancel", IDCANCEL, NULL);
   }
   else if (type == MB_YESNO)
   {
-    ids[0]=IDYES; lbls[0]="Yes";
-    ids[1]=IDNO; lbls[1]="No";
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "Yes", IDYES, "No", IDNO, NULL);
+  }
+  else if (type == MB_RETRYCANCEL)
+  {
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "Retry", IDRETRY, "Cancel", IDCANCEL, NULL);
   }
   else if (type == MB_YESNOCANCEL)
   {
-    ids[0]=IDYES; lbls[0]="Yes";
-    ids[1]=IDNO; lbls[1]="No";
-    ids[2]=IDCANCEL; lbls[2]="Cancel";
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "Yes", IDYES, "No", IDNO, "Cancel", IDCANCEL, NULL);
   }
-  else // MB_OK?
-  {
-    ids[0]=IDOK; lbls[0]="OK";
-  }	
 
-  GtkWidget *window;
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_modal(GTK_WINDOW(window), true);
-  gtk_window_set_destroy_with_parent(GTK_WINDOW(window), true);
-  gtk_window_set_resizable(GTK_WINDOW(window), false);
-  gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
-  gtk_window_set_title(GTK_WINDOW(window), caption);
-  g_signal_connect (G_OBJECT (window), "destroy",
-		      G_CALLBACK (messagebox_callback), NULL);
-
-  gtk_container_set_border_width (GTK_CONTAINER (window), 10);
-  
-  GtkWidget *outer_container = gtk_vbox_new(false, 4);
+  int result = gtk_dialog_run(GTK_DIALOG(dialog));
+  if(result == GTK_RESPONSE_NONE)
   {
-    GtkWidget *label = gtk_label_new(text);
-    gtk_container_add(GTK_CONTAINER(outer_container),label);
-    gtk_widget_show(label);
+    result = 0;
   }
-  {
-    GtkWidget *con = gtk_hbutton_box_new();
-    int x;
-    for(x=0;x<3&&ids[x];x++)
-    {
-      GtkWidget *but = gtk_button_new_with_label(lbls[x]);
-      g_signal_connect(G_OBJECT(but), "clicked", G_CALLBACK(messagebox_callback), &has_clicks[x]);
-      gtk_container_add(GTK_CONTAINER(con), but);
-      gtk_widget_show(but);
-    }
-    gtk_container_add(GTK_CONTAINER(outer_container),con);
-    gtk_widget_show(con);
-  }
- 
-  
-  gtk_container_add(GTK_CONTAINER(window), outer_container);
-  gtk_widget_show(outer_container);
-  gtk_widget_show(window);
-  
-  gtk_main ();
-  
-  int x;
-  for(x=0;x<3 && ids[x]; x++)
-  {
-    if (has_clicks[x]) return ids[x];
-  }
-  if (x>0) x--;
-  return ids[x];
+  gtk_widget_destroy(dialog);
+  return result;
 }
 
 #endif

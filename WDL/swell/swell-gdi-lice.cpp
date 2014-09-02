@@ -232,8 +232,8 @@ HFONT CreateFont(int lfHeight, int lfWidth, int lfEscapement, int lfOrientation,
         FT_New_Face(s_freetype,tmp,0,&face);
       }
     }
-    if (!face) FT_New_Face(s_freetype,"/usr/share/fonts/truetype/freefont/FreeSans.ttf",0,&face);
-    if (!face) FT_New_Face(s_freetype,"/usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf",0,&face);
+    if (!face) FT_New_Face(s_freetype,"/usr/share/fonts/TTF/FreeSans.ttf",0,&face);
+    if (!face) FT_New_Face(s_freetype,"/usr/share/fonts/TTF/DejaVuSans.ttf",0,&face);
   }
   
   if (face)
