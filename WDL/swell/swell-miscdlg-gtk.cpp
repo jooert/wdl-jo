@@ -33,6 +33,7 @@
 
 #include "swell.h"
 #include "swell-internal.h"
+#include "../wdlcstring.h"
 
 void BrowseFile_SetTemplate(const char* dlgid, DLGPROC dlgProc, struct SWELL_DialogResourceIndex *reshead)
 {
@@ -42,12 +43,96 @@ void BrowseFile_SetTemplate(const char* dlgid, DLGPROC dlgProc, struct SWELL_Dia
 bool BrowseForSaveFile(const char *text, const char *initialdir, const char *initialfile, const char *extlist,
                        char *fn, int fnsize)
 {
-  return false;
+  GtkWidget* dialog = gtk_file_chooser_dialog_new(text, NULL, GTK_FILE_CHOOSER_ACTION_SAVE,
+				       "_Cancel", GTK_RESPONSE_CANCEL,
+				       "_Save", GTK_RESPONSE_ACCEPT,
+				       NULL);
+  GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
+  gtk_file_chooser_set_do_overwrite_confirmation(chooser, TRUE);
+
+  // Set initialfile or initialdir if given
+  if(initialfile && initialfile[0] != '\0')
+  {
+    gtk_file_chooser_set_filename(chooser, initialfile);
+  }
+  else if(initialdir && initialdir[0] != '\0')
+  {
+    gtk_file_chooser_set_current_folder(chooser, initialdir);
+  }
+
+  if(extlist)
+  {
+     // Iterate over list of extensions 
+    int it = 0, start = 0;
+    bool first = false;
+    GtkFileFilter* filter;
+ 
+    while(true)
+    {
+      if(extlist[it] == '\0')
+      {
+	if(!first)
+	{
+	  filter = gtk_file_filter_new();
+	  gtk_file_filter_set_name(filter, &extlist[start]);
+	  first = true;
+	}
+	else
+	{
+	  if(it == start)
+	  {
+	    break;
+	  }
+	  gtk_file_filter_add_pattern(filter, &extlist[start]);
+	  gtk_file_chooser_add_filter(chooser, filter);
+	  first = false;
+	}
+	start = it + 1;
+      }
+      ++it;
+    }
+  }
+
+  gint res = gtk_dialog_run(GTK_DIALOG(dialog));
+  bool ret = false;
+  if(res == GTK_RESPONSE_ACCEPT)
+  {
+    char* buf = gtk_file_chooser_get_filename(chooser);
+    lstrcpyn_safe(fn, buf, fnsize);
+    g_free(buf);
+    ret = true;
+  }
+  gtk_widget_destroy(dialog);
+
+  return ret;
 }
 
 bool BrowseForDirectory(const char *text, const char *initialdir, char *fn, int fnsize)
 {
-  return false;
+  GtkWidget* dialog = gtk_file_chooser_dialog_new(text, NULL, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+				       "_Cancel", GTK_RESPONSE_CANCEL,
+				       "_Open", GTK_RESPONSE_ACCEPT,
+				       NULL);
+  GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
+
+  // Set initialdir if given
+  if(initialdir && initialdir[0] != '\0')
+  {
+    gtk_file_chooser_set_current_folder(chooser, initialdir);
+  }
+
+  gint res = gtk_dialog_run(GTK_DIALOG(dialog));
+  bool ret = false;
+  if(res == GTK_RESPONSE_ACCEPT)
+  {
+    char* buf = gtk_file_chooser_get_filename(chooser);
+    lstrcpyn_safe(fn, buf, fnsize);
+    g_free(buf);
+    ret = true;
+  }
+  gtk_widget_destroy(dialog);
+
+  return ret;
 }
 
 
@@ -55,7 +140,101 @@ bool BrowseForDirectory(const char *text, const char *initialdir, char *fn, int 
 char *BrowseForFiles(const char *text, const char *initialdir, 
                      const char *initialfile, bool allowmul, const char *extlist)
 {
-  return NULL;
+  GtkWidget* dialog = gtk_file_chooser_dialog_new(text, NULL, GTK_FILE_CHOOSER_ACTION_OPEN,
+				       "_Cancel", GTK_RESPONSE_CANCEL,
+				       "_Open", GTK_RESPONSE_ACCEPT,
+				       NULL);
+  GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
+  gtk_file_chooser_set_select_multiple(chooser, allowmul);
+
+  // Set initialfile or initialdir if given
+  if(initialfile && initialfile[0] != '\0')
+  {
+    gtk_file_chooser_set_filename(chooser, initialfile);
+  }
+  else if(initialdir && initialdir[0] != '\0')
+  {
+    gtk_file_chooser_set_current_folder(chooser, initialdir);
+  }
+
+  if(extlist)
+  {
+     // Iterate over list of extensions 
+    int it = 0, start = 0;
+    bool first = false;
+    GtkFileFilter* filter;
+ 
+    while(true)
+    {
+      if(extlist[it] == '\0')
+      {
+	if(!first)
+	{
+	  filter = gtk_file_filter_new();
+	  gtk_file_filter_set_name(filter, &extlist[start]);
+	  first = true;
+	}
+	else
+	{
+	  if(it == start)
+	  {
+	    break;
+	  }
+	  gtk_file_filter_add_pattern(filter, &extlist[start]);
+	  gtk_file_chooser_add_filter(chooser, filter);
+	  first = false;
+	}
+	start = it + 1;
+      }
+      ++it;
+    }
+  }
+
+  gint res = gtk_dialog_run(GTK_DIALOG(dialog));
+  char* ret = NULL;
+  if(res == GTK_RESPONSE_ACCEPT)
+  {
+    if(!allowmul)
+    {
+      char* buf = gtk_file_chooser_get_filename(chooser);
+      size_t length = strlen(buf) + 1;
+      ret = (char*)malloc(length);
+      lstrcpyn_safe(ret, buf, length);
+      g_free(buf);
+    }
+    else
+    {
+      char* buf = gtk_file_chooser_get_current_folder(chooser);
+      size_t length = strlen(buf) + 1;
+      ret = (char*)malloc(length);
+      lstrcpyn_safe(ret, buf, length);
+      g_free(buf);
+
+      // Iterate over filenames
+      GSList* fns = gtk_file_chooser_get_filenames(chooser);
+      while(fns)
+      {
+	char* fn = (char*)fns->data;
+	size_t len = strlen(fn) + 1, i = len;
+	// Retrieve only filename from path
+	while(fn[i-1] != '/')
+	{
+	  --i;
+	}
+	ret = (char*)realloc(ret, length + len - i);
+	lstrcpyn_safe(&ret[length], &fn[i], len - i);
+	length += len - i;
+	g_free(fn);
+	fns = fns->next;
+      }
+      g_slist_free(fns);
+      ret = (char*)realloc(ret, length + 1);
+      ret[length] = '\0';
+    }
+  }
+  gtk_widget_destroy(dialog);
+
+  return ret;
 }
 
 int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
