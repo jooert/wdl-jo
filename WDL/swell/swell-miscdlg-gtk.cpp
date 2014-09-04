@@ -35,6 +35,49 @@
 #include "swell-internal.h"
 #include "../wdlcstring.h"
 
+static void swell_parseExtlist(GtkFileChooser *chooser, const char *extlist)
+{
+  if(extlist)
+  {
+     // Iterate over list of extensions
+    int it = 0;
+    while(!(extlist[it] == '\0' && extlist[++it] == '\0'))
+    {
+      GtkFileFilter *filter = gtk_file_filter_new();
+      // First string contains name of filter
+      gtk_file_filter_set_name(filter, &extlist[it]);
+      it += strlen(&extlist[it]) + 1;
+
+      // Second string contains patterns, semicolon-separated
+      // Make patterns case insensitive: Replace *.xyz with *.[xX][yY][zZ]
+      char buf[128] = {0};
+      int bufi = 0;
+      for(int i = it, len = strlen(&extlist[it]) + it + 1; i < len; ++i)
+      {
+	if(extlist[i] == ';' || i + 1 == len)
+	{
+	  buf[bufi] = '\0';
+	  gtk_file_filter_add_pattern(filter, buf);
+	  bufi = 0;
+	}
+	else if(isalpha(extlist[i]))
+	{
+	  buf[bufi++] = '[';
+	  buf[bufi++] = tolower(extlist[i]);
+	  buf[bufi++] = toupper(extlist[i]);
+	  buf[bufi++] = ']';
+	}
+	else
+	{
+	  buf[bufi++] = extlist[i];
+	}
+      }
+      gtk_file_chooser_add_filter(chooser, filter);
+      it += strlen(&extlist[it]);
+    }
+  }
+}
+
 void BrowseFile_SetTemplate(const char* dlgid, DLGPROC dlgProc, struct SWELL_DialogResourceIndex *reshead)
 {
 }
@@ -60,38 +103,7 @@ bool BrowseForSaveFile(const char *text, const char *initialdir, const char *ini
     gtk_file_chooser_set_current_folder(chooser, initialdir);
   }
 
-  if(extlist)
-  {
-     // Iterate over list of extensions 
-    int it = 0, start = 0;
-    bool first = false;
-    GtkFileFilter* filter;
- 
-    while(true)
-    {
-      if(extlist[it] == '\0')
-      {
-	if(!first)
-	{
-	  filter = gtk_file_filter_new();
-	  gtk_file_filter_set_name(filter, &extlist[start]);
-	  first = true;
-	}
-	else
-	{
-	  if(it == start)
-	  {
-	    break;
-	  }
-	  gtk_file_filter_add_pattern(filter, &extlist[start]);
-	  gtk_file_chooser_add_filter(chooser, filter);
-	  first = false;
-	}
-	start = it + 1;
-      }
-      ++it;
-    }
-  }
+  swell_parseExtlist(chooser, extlist);
 
   gint res = gtk_dialog_run(GTK_DIALOG(dialog));
   bool ret = false;
@@ -157,38 +169,7 @@ char *BrowseForFiles(const char *text, const char *initialdir,
     gtk_file_chooser_set_current_folder(chooser, initialdir);
   }
 
-  if(extlist)
-  {
-     // Iterate over list of extensions 
-    int it = 0, start = 0;
-    bool first = false;
-    GtkFileFilter* filter;
- 
-    while(true)
-    {
-      if(extlist[it] == '\0')
-      {
-	if(!first)
-	{
-	  filter = gtk_file_filter_new();
-	  gtk_file_filter_set_name(filter, &extlist[start]);
-	  first = true;
-	}
-	else
-	{
-	  if(it == start)
-	  {
-	    break;
-	  }
-	  gtk_file_filter_add_pattern(filter, &extlist[start]);
-	  gtk_file_chooser_add_filter(chooser, filter);
-	  first = false;
-	}
-	start = it + 1;
-      }
-      ++it;
-    }
-  }
+  swell_parseExtlist(chooser, extlist);
 
   gint res = gtk_dialog_run(GTK_DIALOG(dialog));
   char* ret = NULL;
