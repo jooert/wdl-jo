@@ -47,21 +47,19 @@ static DWORD s_lastMessagePos;
 
 #ifdef SWELL_TARGET_GDK
 
-static GdkWindow *SWELL_g_focus_oswindow;
+static GtkWidget *SWELL_g_focus_oswindow;
 static int SWELL_gdk_active;
 
 HWND ChildWindowFromPoint(HWND h, POINT p);
 bool IsWindowEnabled(HWND hwnd);
 
-static void swell_gdkEventHandler(GdkEvent *event, gpointer data);
+static void swell_gdkEventHandler(GtkWidget *widget, GdkEvent *event, gpointer data);
 void SWELL_initargs(int *argc, char ***argv) 
 {
   if (!SWELL_gdk_active) 
   {
    // maybe make the main app call this with real parms
     SWELL_gdk_active = gtk_init_check(argc,argv) ? 1 : -1;
-    if (SWELL_gdk_active > 0)
-      gdk_event_handler_set(swell_gdkEventHandler,NULL,NULL);
   }
 }
 
@@ -88,7 +86,7 @@ static void swell_destroyOSwindow(HWND hwnd)
   if (hwnd && hwnd->m_oswindow)
   {
     if (SWELL_g_focus_oswindow == hwnd->m_oswindow) SWELL_g_focus_oswindow=NULL;
-    gdk_window_destroy(hwnd->m_oswindow);
+    gtk_widget_destroy(hwnd->m_oswindow);
     hwnd->m_oswindow=NULL;
 #ifdef SWELL_LICE_GDI
     delete hwnd->m_backingstore;
@@ -100,9 +98,60 @@ static void swell_setOSwindowtext(HWND hwnd)
 {
   if (hwnd && hwnd->m_oswindow)
   {
-    gdk_window_set_title(hwnd->m_oswindow, hwnd->m_title ? hwnd->m_title : (char*)"");
+    gtk_window_set_title(GTK_WINDOW(hwnd->m_oswindow), hwnd->m_title ? hwnd->m_title : (char*)"");
   }
 }
+
+static gboolean swell_gdkDraw(GtkWidget *widget, cairo_t *crc, gpointer data)
+{
+#ifdef SWELL_LICE_GDI
+  // super slow
+  RECT r,cr;
+
+  // don't use GetClientRect(),since we're getting it pre-NCCALCSIZE etc
+  
+#if SWELL_TARGET_GDK==2
+  { 
+    gint w=0,h=0; 
+    gdk_drawable_get_size(gdkwindow,&w,&h);
+    cr.right = w; cr.bottom = h;
+  }
+#else
+  cr.right = gtk_widget_get_allocated_width(widget);
+  cr.bottom = gtk_widget_get_allocated_height(widget);
+#endif
+  cr.left=cr.top=0;
+
+  double left, top, right, bottom;
+  cairo_clip_extents(crc, &left, &top, &right, &bottom);
+  r.left = left;
+  r.top = top;
+  r.right = right;
+  r.bottom = bottom;
+
+  HWND hwnd = (HWND)g_object_get_data(G_OBJECT(widget), "hwnd");
+  if (!hwnd->m_backingstore)
+    hwnd->m_backingstore = new LICE_MemBitmap;
+
+  bool forceref = hwnd->m_backingstore->resize(cr.right-cr.left,cr.bottom-cr.top);
+  if (forceref) r = cr;
+
+  LICE_SubBitmap tmpbm(hwnd->m_backingstore,r.left,r.top,r.right-r.left,r.bottom-r.top);
+
+  if (tmpbm.getWidth()>0 && tmpbm.getHeight()>0) 
+  {
+  void SWELL_internalLICEpaint(HWND hwnd, LICE_IBitmap *bmout, int bmout_xpos, int bmout_ypos, bool forceref);
+  SWELL_internalLICEpaint(hwnd, &tmpbm, r.left, r.top, forceref);
+  cairo_surface_t *temp_surface = cairo_image_surface_create_for_data((guchar*)tmpbm.getBits(), CAIRO_FORMAT_RGB24, tmpbm.getWidth(),tmpbm.getHeight(), tmpbm.getRowSpan()*4);
+  cairo_set_source_surface(crc, temp_surface, r.left, r.top);
+  cairo_paint(crc);
+  cairo_surface_destroy(temp_surface);
+  }
+#endif
+
+  return TRUE;
+}
+
 static void swell_manageOSwindow(HWND hwnd, bool wantfocus)
 {
   if (!hwnd) return;
@@ -117,7 +166,7 @@ static void swell_manageOSwindow(HWND hwnd, bool wantfocus)
     {
       if (swell_initwindowsys())
       {
-        HWND owner = NULL; // hwnd->m_owner;
+        //HWND owner = NULL; // hwnd->m_owner;
 // parent windows dont seem to work the way we'd want, yet, in gdk...
 /*        while (owner && !owner->m_oswindow)
         {
@@ -127,31 +176,37 @@ static void swell_manageOSwindow(HWND hwnd, bool wantfocus)
 */
  
         RECT r = hwnd->m_position;
-        GdkWindowAttr attr={0,};
-        attr.title = "";
-        attr.event_mask = GDK_ALL_EVENTS_MASK|GDK_EXPOSURE_MASK;
-        attr.x = r.left;
-        attr.y = r.top;
-        attr.width = r.right-r.left;
-        attr.height = r.bottom-r.top;
-        attr.wclass = GDK_INPUT_OUTPUT;
-        attr.window_type = GDK_WINDOW_TOPLEVEL;
-        hwnd->m_oswindow = gdk_window_new(owner ? owner->m_oswindow : NULL,&attr,GDK_WA_X|GDK_WA_Y);
- 
-        if (hwnd->m_oswindow) 
+	hwnd->m_oswindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	if (hwnd->m_oswindow) 
         {
-          gdk_window_set_user_data(hwnd->m_oswindow,hwnd);
-          gdk_window_move_resize(hwnd->m_oswindow,r.left,r.top,r.right-r.left,r.bottom-r.top);
-          if (!wantfocus) gdk_window_set_focus_on_map(hwnd->m_oswindow,false);
-          HWND DialogBoxIsActive();
+	  gtk_window_move(GTK_WINDOW(hwnd->m_oswindow), r.left, r.top);
+	  gtk_window_set_default_size(GTK_WINDOW(hwnd->m_oswindow), r.right-r.left, r.bottom-r.top);
+	  gtk_widget_set_app_paintable(hwnd->m_oswindow, TRUE);
+	  gtk_widget_set_double_buffered(hwnd->m_oswindow, FALSE);
+	  g_object_set_data(G_OBJECT(hwnd->m_oswindow), "hwnd", hwnd);
+
+	  g_signal_connect(hwnd->m_oswindow, "button-press-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "button-release-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "configure-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "delete-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "grab-broken-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "key-press-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "key-release-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "motion-notify-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "window-state-event", G_CALLBACK(swell_gdkEventHandler), NULL);
+	  g_signal_connect(hwnd->m_oswindow, "draw", G_CALLBACK(swell_gdkDraw), NULL);
+ 
+          if (!wantfocus) gtk_window_set_focus_on_map(GTK_WINDOW(hwnd->m_oswindow), false);
+
           if (!(hwnd->m_style & WS_CAPTION)) 
           {
-            gdk_window_set_override_redirect(hwnd->m_oswindow,true);
+	    gtk_window_set_decorated(GTK_WINDOW(hwnd->m_oswindow), false);
           }
-          else if (/*hwnd == DialogBoxIsActive() || */ !(hwnd->m_style&WS_THICKFRAME))
-	    gdk_window_set_type_hint(hwnd->m_oswindow,GDK_WINDOW_TYPE_HINT_DIALOG); // this is a better default behavior
-
-          gdk_window_show(hwnd->m_oswindow);
+          else if (!(hwnd->m_style&WS_THICKFRAME))
+	  {
+	    gtk_window_set_type_hint(GTK_WINDOW(hwnd->m_oswindow), GDK_WINDOW_TYPE_HINT_DIALOG);
+	  }
+	  gtk_widget_show(hwnd->m_oswindow);
         }
       }
     }
@@ -167,7 +222,7 @@ void swell_OSupdateWindowToScreen(HWND hwnd, RECT *rect)
   if (hwnd && hwnd->m_backingstore && hwnd->m_oswindow)
   {
     LICE_SubBitmap tmpbm(hwnd->m_backingstore,rect->left,rect->top,rect->right-rect->left,rect->bottom-rect->top);
-    cairo_t * crc = gdk_cairo_create (hwnd->m_oswindow);
+    cairo_t *crc = gdk_cairo_create (gtk_widget_get_window(hwnd->m_oswindow));
     cairo_surface_t *temp_surface = cairo_image_surface_create_for_data((guchar*)tmpbm.getBits(), CAIRO_FORMAT_RGB24, tmpbm.getWidth(),tmpbm.getHeight(), tmpbm.getRowSpan()*4);
     cairo_set_source_surface(crc, temp_surface, rect->left, rect->top);
     cairo_paint(crc);
@@ -262,203 +317,141 @@ static LRESULT SendMouseMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
   return ret;
 }
 
-static void swell_gdkEventHandler(GdkEvent *evt, gpointer data)
+static void swell_gdkEventHandler(GtkWidget *widget, GdkEvent *evt, gpointer data)
 {
+  HWND hwnd = NULL;
+  if (widget)
+  {
+    hwnd = (HWND)g_object_get_data(G_OBJECT(widget), "hwnd");
+  }
+
+  if (hwnd) // validate window (todo later have a window class that we check)
+  {
+    HWND a = SWELL_topwindows;
+    while (a && a != hwnd) a=a->m_next;
+    if (!a) hwnd=NULL;
+  }
+
+  // if (evt->type == GDK_FOCUS_CHANGE)
+  // {
+  //   GdkEventFocus *fc = (GdkEventFocus *)evt;
+  //   if (fc->in) SWELL_g_focus_oswindow = hwnd ? fc->window : NULL;
+  // }
+
+  if (hwnd) switch (evt->type)
+  {
+  case GDK_DELETE:
+    if (IsWindowEnabled(hwnd) && !SendMessage(hwnd,WM_CLOSE,0,0))
+      SendMessage(hwnd,WM_COMMAND,IDCANCEL,0);
+    break;
+  case GDK_CONFIGURE: // size/move, GdkEventConfigure
     {
-      HWND hwnd = NULL;
-      if (((GdkEventAny*)evt)->window) gdk_window_get_user_data(((GdkEventAny*)evt)->window,(gpointer*)&hwnd);
-
-      if (hwnd) // validate window (todo later have a window class that we check)
-      {
-        HWND a = SWELL_topwindows;
-        while (a && a != hwnd) a=a->m_next;
-        if (!a) hwnd=NULL;
-      }
-
-      if (!hwnd)
-      {
-	gtk_main_do_event(evt);
-	return;
-      }
-
-      if (evt->type == GDK_FOCUS_CHANGE)
-      {
-        GdkEventFocus *fc = (GdkEventFocus *)evt;
-        if (fc->in) SWELL_g_focus_oswindow = hwnd ? fc->window : NULL;
-      }
-
-      if (hwnd) switch (evt->type)
-      {
-        case GDK_DELETE:
-          if (IsWindowEnabled(hwnd) && !SendMessage(hwnd,WM_CLOSE,0,0))
-            SendMessage(hwnd,WM_COMMAND,IDCANCEL,0);
-        break;
-        case GDK_EXPOSE: // paint! GdkEventExpose...
-          {
-            GdkEventExpose *exp = (GdkEventExpose*)evt;
-#ifdef SWELL_LICE_GDI
-            // super slow
-            RECT r,cr;
-
-            // don't use GetClientRect(),since we're getting it pre-NCCALCSIZE etc
-
-#if SWELL_TARGET_GDK==2
-            { 
-              gint w=0,h=0; 
-              gdk_drawable_get_size(hwnd->m_oswindow,&w,&h);
-              cr.right = w; cr.bottom = h;
-            }
-#else
-            cr.right = gdk_window_get_width(hwnd->m_oswindow);
-            cr.bottom = gdk_window_get_height(hwnd->m_oswindow);
-#endif
-            cr.left=cr.top=0;
-
-            r.left = exp->area.x; 
-            r.top=exp->area.y; 
-            r.bottom=r.top+exp->area.height; 
-            r.right=r.left+exp->area.width;
-            if (!hwnd->m_backingstore)
-              hwnd->m_backingstore = new LICE_MemBitmap;
-
-            bool forceref = hwnd->m_backingstore->resize(cr.right-cr.left,cr.bottom-cr.top);
-            if (forceref) r = cr;
-
-            LICE_SubBitmap tmpbm(hwnd->m_backingstore,r.left,r.top,r.right-r.left,r.bottom-r.top);
-
-            if (tmpbm.getWidth()>0 && tmpbm.getHeight()>0) 
-            {
-              void SWELL_internalLICEpaint(HWND hwnd, LICE_IBitmap *bmout, int bmout_xpos, int bmout_ypos, bool forceref);
-              SWELL_internalLICEpaint(hwnd, &tmpbm, r.left, r.top, forceref);
-              cairo_t *crc = gdk_cairo_create (exp->window);
-              cairo_surface_t *temp_surface = cairo_image_surface_create_for_data((guchar*)tmpbm.getBits(), CAIRO_FORMAT_RGB24, tmpbm.getWidth(),tmpbm.getHeight(), tmpbm.getRowSpan()*4);
-//              cairo_surface_t *sub_surface = cairo_surface_create_for_rectangle(hwnd->m_backingstore, 0, 0, cr.right, cr.bottom);
-              cairo_set_source_surface(crc, temp_surface, r.left, r.top);
-              cairo_paint(crc);
-              cairo_surface_destroy(temp_surface);
-              cairo_destroy(crc);
-            }
-#endif
-          }
-        break;
-        case GDK_CONFIGURE: // size/move, GdkEventConfigure
-          {
-            GdkEventConfigure *cfg = (GdkEventConfigure*)evt;
-            int flag=0;
-            if (cfg->x != hwnd->m_position.left || cfg->y != hwnd->m_position.top)  flag|=1;
-            if (cfg->width != hwnd->m_position.right-hwnd->m_position.left || cfg->height != hwnd->m_position.bottom - hwnd->m_position.top) flag|=2;
-            hwnd->m_position.left = cfg->x;
-            hwnd->m_position.top = cfg->y;
-            hwnd->m_position.right = cfg->x + cfg->width;
-            hwnd->m_position.bottom = cfg->y + cfg->height;
-            if (flag&1) SendMessage(hwnd,WM_MOVE,0,0);
-            if (flag&2) SendMessage(hwnd,WM_SIZE,0,0);
-          }
-        break;
-        case GDK_WINDOW_STATE: /// GdkEventWindowState for min/max
-          printf("minmax\n");
-        break;
-        case GDK_GRAB_BROKEN:
-          {
-            GdkEventGrabBroken *bk = (GdkEventGrabBroken*)evt;
-            if (s_captured_window)
-            {
-              SendMessage(s_captured_window,WM_CAPTURECHANGED,0,0);
-              s_captured_window=0;
-            }
-          }
-        break;
-        case GDK_KEY_PRESS:
-        case GDK_KEY_RELEASE:
-          { // todo: pass through app-specific default processing before sending to child window
-            GdkEventKey *k = (GdkEventKey *)evt;
-            //printf("key%s: %d %s\n", evt->type == GDK_KEY_PRESS ? "down" : "up", k->keyval, k->string);
-            int modifiers = FVIRTKEY;
-            if (k->state&GDK_SHIFT_MASK) modifiers|=FSHIFT;
-            if (k->state&GDK_CONTROL_MASK) modifiers|=FCONTROL;
-            if (k->state&GDK_MOD1_MASK) modifiers|=FALT;
-
-            int kv = swell_gdkConvertKey(k->keyval);
-            kv=toupper(kv);
-
-            HWND foc = GetFocus();
-            if (foc && IsChild(hwnd,foc)) hwnd=foc;
-            MSG msg = { hwnd, evt->type == GDK_KEY_PRESS ? WM_KEYDOWN : WM_KEYUP, kv, modifiers, };
-            if (SWELLAppMain(SWELLAPP_PROCESSMESSAGE,(INT_PTR)&msg,0)<=0)
-              SendMessage(msg.hwnd, msg.message, msg.wParam, msg.lParam);
-          }
-        break;
-        case GDK_MOTION_NOTIFY:
-          {
-            GdkEventMotion *m = (GdkEventMotion *)evt;
-            s_lastMessagePos = MAKELONG(((int)m->x_root&0xffff),((int)m->y_root&0xffff));
-//            printf("motion %d %d %d %d\n", (int)m->x, (int)m->y, (int)m->x_root, (int)m->y_root); 
-            POINT p={m->x, m->y};
-            HWND hwnd2 = GetCapture();
-            if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
-//char buf[1024];
-//GetWindowText(hwnd2,buf,sizeof(buf));
- //           printf("%x %s\n", hwnd2,buf);
-            POINT p2={m->x_root, m->y_root};
-            ScreenToClient(hwnd2, &p2);
-            //printf("%d %d\n", p2.x, p2.y);
-            if (hwnd2) hwnd2->Retain();
-            SendMouseMessage(hwnd2, WM_MOUSEMOVE, 0, MAKELPARAM(p2.x, p2.y));
-            if (hwnd2) hwnd2->Release();
-            gdk_event_request_motions(m);
-          }
-        break;
-        case GDK_BUTTON_PRESS:
-        case GDK_2BUTTON_PRESS:
-        case GDK_BUTTON_RELEASE:
-          {
-            GdkEventButton *b = (GdkEventButton *)evt;
-            s_lastMessagePos = MAKELONG(((int)b->x_root&0xffff),((int)b->y_root&0xffff));
-//            printf("button %d %d %d %d %d\n", evt->type, (int)b->x, (int)b->y, (int)b->x_root, (int)b->y_root); 
-            POINT p={b->x, b->y};
-            HWND hwnd2 = GetCapture();
-            if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
-//            printf("%x\n", hwnd2);
-            POINT p2={b->x_root, b->y_root};
-            ScreenToClient(hwnd2, &p2);
-            //printf("%d %d\n", p2.x, p2.y);
-            int msg=WM_LBUTTONDOWN;
-            if (b->button==2) msg=WM_MBUTTONDOWN;
-            else if (b->button==3) msg=WM_RBUTTONDOWN;
-            
-            if (hwnd && hwnd->m_oswindow && 
-                SWELL_g_focus_oswindow != hwnd->m_oswindow)
-                     SWELL_g_focus_oswindow = hwnd->m_oswindow;
-
-            if(evt->type == GDK_BUTTON_RELEASE) msg++; // move from down to up
-            else if(evt->type == GDK_2BUTTON_PRESS) msg+=2; // move from down to up
-            if (hwnd2) hwnd2->Retain();
-            SendMouseMessage(hwnd2, msg, 0, MAKELPARAM(p2.x, p2.y));
-            if (hwnd2) hwnd2->Release();
-          }
-        break;
-        default:
-          //printf("msg: %d\n",evt->type);
-        break;
-      }
-
+      GdkEventConfigure *cfg = (GdkEventConfigure*)evt;
+      int flag=0;
+      if (cfg->x != hwnd->m_position.left || cfg->y != hwnd->m_position.top)  flag|=1;
+      if (cfg->width != hwnd->m_position.right-hwnd->m_position.left || cfg->height != hwnd->m_position.bottom - hwnd->m_position.top) flag|=2;
+      hwnd->m_position.left = cfg->x;
+      hwnd->m_position.top = cfg->y;
+      hwnd->m_position.right = cfg->x + cfg->width;
+      hwnd->m_position.bottom = cfg->y + cfg->height;
+      if (flag&1) SendMessage(hwnd,WM_MOVE,0,0);
+      if (flag&2) SendMessage(hwnd,WM_SIZE,0,0);
     }
+    break;
+  case GDK_WINDOW_STATE: /// GdkEventWindowState for min/max
+    printf("minmax\n");
+    break;
+  case GDK_GRAB_BROKEN:
+    {
+      GdkEventGrabBroken *bk = (GdkEventGrabBroken*)evt;
+      if (s_captured_window)
+	{
+	  SendMessage(s_captured_window,WM_CAPTURECHANGED,0,0);
+	  s_captured_window=0;
+	}
+    }
+    break;
+  case GDK_KEY_PRESS:
+  case GDK_KEY_RELEASE:
+    { // todo: pass through app-specific default processing before sending to child window
+      GdkEventKey *k = (GdkEventKey *)evt;
+      //printf("key%s: %d %s\n", evt->type == GDK_KEY_PRESS ? "down" : "up", k->keyval, k->string);
+      int modifiers = FVIRTKEY;
+      if (k->state&GDK_SHIFT_MASK) modifiers|=FSHIFT;
+      if (k->state&GDK_CONTROL_MASK) modifiers|=FCONTROL;
+      if (k->state&GDK_MOD1_MASK) modifiers|=FALT;
+
+      int kv = swell_gdkConvertKey(k->keyval);
+      kv=toupper(kv);
+
+      HWND foc = GetFocus();
+      if (foc && IsChild(hwnd,foc)) hwnd=foc;
+      MSG msg = { hwnd, evt->type == GDK_KEY_PRESS ? WM_KEYDOWN : WM_KEYUP, kv, modifiers, };
+      if (SWELLAppMain(SWELLAPP_PROCESSMESSAGE,(INT_PTR)&msg,0)<=0)
+	SendMessage(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+    }
+    break;
+  case GDK_MOTION_NOTIFY:
+    {
+      GdkEventMotion *m = (GdkEventMotion *)evt;
+      s_lastMessagePos = MAKELONG(((int)m->x_root&0xffff),((int)m->y_root&0xffff));
+      //            printf("motion %d %d %d %d\n", (int)m->x, (int)m->y, (int)m->x_root, (int)m->y_root); 
+      POINT p={m->x, m->y};
+      HWND hwnd2 = GetCapture();
+      if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
+      //char buf[1024];
+      //GetWindowText(hwnd2,buf,sizeof(buf));
+      //           printf("%x %s\n", hwnd2,buf);
+      POINT p2={m->x_root, m->y_root};
+      ScreenToClient(hwnd2, &p2);
+      //printf("%d %d\n", p2.x, p2.y);
+      if (hwnd2) hwnd2->Retain();
+      SendMouseMessage(hwnd2, WM_MOUSEMOVE, 0, MAKELPARAM(p2.x, p2.y));
+      if (hwnd2) hwnd2->Release();
+      gdk_event_request_motions(m);
+    }
+    break;
+  case GDK_BUTTON_PRESS:
+  case GDK_2BUTTON_PRESS:
+  case GDK_BUTTON_RELEASE:
+    {
+      GdkEventButton *b = (GdkEventButton *)evt;
+      s_lastMessagePos = MAKELONG(((int)b->x_root&0xffff),((int)b->y_root&0xffff));
+      //            printf("button %d %d %d %d %d\n", evt->type, (int)b->x, (int)b->y, (int)b->x_root, (int)b->y_root); 
+      POINT p={b->x, b->y};
+      HWND hwnd2 = GetCapture();
+      if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
+      //            printf("%x\n", hwnd2);
+      POINT p2={b->x_root, b->y_root};
+      ScreenToClient(hwnd2, &p2);
+      //printf("%d %d\n", p2.x, p2.y);
+      int msg=WM_LBUTTONDOWN;
+      if (b->button==2) msg=WM_MBUTTONDOWN;
+      else if (b->button==3) msg=WM_RBUTTONDOWN;
+            
+      if (hwnd && hwnd->m_oswindow && 
+	  SWELL_g_focus_oswindow != hwnd->m_oswindow)
+	SWELL_g_focus_oswindow = hwnd->m_oswindow;
+
+      if(evt->type == GDK_BUTTON_RELEASE) msg++; // move from down to up
+      else if(evt->type == GDK_2BUTTON_PRESS) msg+=2; // move from down to up
+      if (hwnd2) hwnd2->Retain();
+      SendMouseMessage(hwnd2, msg, 0, MAKELPARAM(p2.x, p2.y));
+      if (hwnd2) hwnd2->Release();
+    }
+    break;
+  default:
+    //printf("msg: %d\n",evt->type);
+    break;
+  }
 }
 
 void swell_runOSevents()
 {
   if (SWELL_gdk_active>0) 
   {
-//    static GMainLoop *loop;
-//    if (!loop) loop = g_main_loop_new(NULL,TRUE);
-    gdk_window_process_all_updates();
-
-    GdkEvent *evt;
-    while (gdk_events_pending() && (evt = gdk_event_get()))
-    {
-      swell_gdkEventHandler(evt,(gpointer)1);
-      gdk_event_free(evt);
-    }
+    while (gtk_events_pending())
+      gtk_main_iteration();
   }
 }
 void SWELL_RunEvents()
@@ -765,7 +758,7 @@ void EnableWindow(HWND hwnd, int enable)
   if (!hwnd) return;
   hwnd->m_enabled=!!enable;
 #ifdef SWELL_TARGET_GDK
-  if (hwnd->m_oswindow) gdk_window_set_accept_focus(hwnd->m_oswindow,!!enable);
+  if (hwnd->m_oswindow) gtk_window_set_accept_focus(GTK_WINDOW(hwnd->m_oswindow),!!enable);
 #endif
 
   if (!enable && SWELL_g_focuswnd == hwnd) SWELL_g_focuswnd = 0;
@@ -779,11 +772,8 @@ void SetFocus(HWND hwnd)
   SWELL_g_focuswnd = hwnd;
 #ifdef SWELL_TARGET_GDK
   while (hwnd && !hwnd->m_oswindow) hwnd=hwnd->m_parent;
-  if (hwnd) gdk_window_raise(hwnd->m_oswindow);
-  if (hwnd && hwnd->m_oswindow != SWELL_g_focus_oswindow)
-  {
-    gdk_window_focus(SWELL_g_focus_oswindow = hwnd->m_oswindow,GDK_CURRENT_TIME);
-  }
+  if (hwnd) gtk_window_present(GTK_WINDOW(hwnd->m_oswindow));
+  SWELL_g_focus_oswindow = hwnd->m_oswindow;
 #endif
 }
 void SetForegroundWindow(HWND hwnd)
@@ -901,7 +891,7 @@ void ScreenToClient(HWND hwnd, POINT *p)
 #ifdef SWELL_TARGET_GDK
   if (tmp && tmp->m_oswindow)
   {
-    GdkWindow *wnd = tmp->m_oswindow;
+    GdkWindow *wnd = gtk_widget_get_window(tmp->m_oswindow);
     gint px=0,py=0;
     gdk_window_get_origin(wnd,&px,&py); // this is probably unreliable but ugh (use get_geometry?)
     x-=px;
@@ -943,7 +933,7 @@ void ClientToScreen(HWND hwnd, POINT *p)
 #ifdef SWELL_TARGET_GDK
   if (tmp && tmp->m_oswindow)
   {
-    GdkWindow *wnd = tmp->m_oswindow;
+    GdkWindow *wnd = gtk_widget_get_window(tmp->m_oswindow);
     gint px=0,py=0;
     gdk_window_get_origin(wnd,&px,&py); // this is probably unreliable but ugh (use get_geometry?)
     x+=px;
@@ -962,7 +952,7 @@ bool GetWindowRect(HWND hwnd, RECT *r)
   if (hwnd->m_oswindow)
   {
     GdkRectangle rc;
-    gdk_window_get_frame_extents(hwnd->m_oswindow,&rc);
+    gdk_window_get_frame_extents(gtk_widget_get_window(hwnd->m_oswindow),&rc);
     r->left=rc.x;
     r->top=rc.y;
     r->right=rc.x+rc.width;
@@ -984,12 +974,12 @@ void GetWindowContentViewRect(HWND hwnd, RECT *r)
   if (hwnd && hwnd->m_oswindow) 
   {
     gint w=0,h=0,px=0,py=0;
-    gdk_window_get_position(hwnd->m_oswindow,&px,&py);
+    
+    gtk_window_get_position(GTK_WINDOW(hwnd->m_oswindow),&px,&py);
 #if SWELL_TARGET_GDK==2
     gdk_drawable_get_size(hwnd->m_oswindow,&w,&h);
 #else
-    w = gdk_window_get_width(hwnd->m_oswindow);
-    h = gdk_window_get_height(hwnd->m_oswindow);
+    gtk_window_get_size(GTK_WINDOW(hwnd->m_oswindow), &w, &h);
 #endif
     r->left=px;
     r->top=py;
@@ -1015,8 +1005,7 @@ void GetClientRect(HWND hwnd, RECT *r)
     r->right = w;
     r->bottom = h;
 #else
-    r->right = gdk_window_get_width(hwnd->m_oswindow);
-    r->bottom = gdk_window_get_height(hwnd->m_oswindow);
+    gtk_window_get_size(GTK_WINDOW(hwnd->m_oswindow), &r->right, &r->bottom);
 #endif
     
   }
@@ -1105,9 +1094,13 @@ void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flag
     if (hwnd->m_oswindow) 
     {
       //printf("repos %d,%d,%d,%d, %d\n",f.left,f.top,f.right,f.bottom,reposflag);
-      if ((reposflag&3)==3) gdk_window_move_resize(hwnd->m_oswindow,f.left,f.top,f.right-f.left,f.bottom-f.top);
-      else if (reposflag&2) gdk_window_resize(hwnd->m_oswindow,f.right-f.left,f.bottom-f.top);
-      else if (reposflag&1) gdk_window_move(hwnd->m_oswindow,f.left,f.top);
+      if ((reposflag&3)==3)
+      {
+	gtk_window_move(GTK_WINDOW(hwnd->m_oswindow),f.left,f.top);
+	gtk_window_resize(GTK_WINDOW(hwnd->m_oswindow),f.right-f.left,f.bottom-f.top);
+      }
+      else if (reposflag&2) gtk_window_resize(GTK_WINDOW(hwnd->m_oswindow),f.right-f.left,f.bottom-f.top);
+      else if (reposflag&1) gtk_window_move(GTK_WINDOW(hwnd->m_oswindow),f.left,f.top);
     }
     else // top level windows above get their position from gdk and cache it in m_position
 #endif
@@ -2174,7 +2167,7 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 
 /// these are for swell-dlggen.h
 HWND SWELL_MakeButton(int def, const char *label, int idx, int x, int y, int w, int h, int flags)
-{  
+{
   UINT_PTR a=(UINT_PTR)label;
   if (a < 65536) label = "ICONTEMP";
   
@@ -2994,7 +2987,7 @@ void UpdateWindow(HWND hwnd)
   {
 #ifdef SWELL_TARGET_GDK
     while (hwnd && !hwnd->m_oswindow) hwnd=hwnd->m_parent;
-    if (hwnd && hwnd->m_oswindow) gdk_window_process_updates(hwnd->m_oswindow,true);
+    if (hwnd && hwnd->m_oswindow) gdk_window_process_updates(gtk_widget_get_window(hwnd->m_oswindow),true);
 #endif
   }
 }
@@ -3044,7 +3037,7 @@ BOOL InvalidateRect(HWND hwnd, const RECT *r, int eraseBk)
     rect.x += p.rgrc[0].left;
     rect.y += p.rgrc[0].top;
 
-    gdk_window_invalidate_rect(hwnd->m_oswindow,hwnd!=hwndCall || r ? &rect : NULL,true);
+    gdk_window_invalidate_rect(gtk_widget_get_window(hwnd->m_oswindow),hwnd!=hwndCall || r ? &rect : NULL,true);
   }
 #endif
   return TRUE;
@@ -3829,7 +3822,19 @@ WORD GetAsyncKeyState(int key)
     GdkModifierType mod=(GdkModifierType)0;
     HWND h = GetFocus();
     while (h && !h->m_oswindow) h = h->m_parent;
-    gdk_window_get_pointer(h?  h->m_oswindow : gdk_get_default_root_window(),NULL,NULL,&mod);
+
+    if(h)
+    {
+      GdkDeviceManager* device_manager = gdk_display_get_device_manager(gtk_widget_get_display(h->m_oswindow));
+      GdkDevice* pointer = gdk_device_manager_get_client_pointer(device_manager);
+      gdk_window_get_device_position(gtk_widget_get_window(h->m_oswindow),pointer,NULL,NULL,&mod);
+    }
+    else
+    {
+      GdkDeviceManager* device_manager = gdk_display_get_device_manager(gdk_window_get_display(gdk_get_default_root_window()));
+      GdkDevice* pointer = gdk_device_manager_get_client_pointer(device_manager);
+      gdk_window_get_device_position(gdk_get_default_root_window(),pointer,NULL,NULL,&mod);
+    }
  
     if (key == VK_LBUTTON) return (mod&GDK_BUTTON1_MASK)?0x8000:0;
     if (key == VK_MBUTTON) return (mod&GDK_BUTTON2_MASK)?0x8000:0;

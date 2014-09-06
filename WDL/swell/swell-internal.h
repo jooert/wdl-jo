@@ -563,6 +563,7 @@ struct HDC__ {
 
 #include <gdk/gdk.h>
 #include <gdk/gdkkeysyms.h>
+#include <gtk/gtk.h>
 
 #else
 // generic 
@@ -595,7 +596,7 @@ struct HWND__
   
 
 #ifdef SWELL_TARGET_GDK
-  GdkWindow *m_oswindow;
+  GtkWidget *m_oswindow;
 #endif
   char *m_title;
 
