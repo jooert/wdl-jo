@@ -45,7 +45,7 @@ static HWND s_captured_window;
 HWND SWELL_g_focuswnd; // update from focus-in-event / focus-out-event signals, have to enable the GDK_FOCUS_CHANGE_MASK bits for the gdkwindow
 static DWORD s_lastMessagePos;
 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
 
 static GtkWidget *SWELL_g_focus_oswindow;
 static int SWELL_gdk_active;
@@ -109,17 +109,8 @@ static gboolean swell_gdkDraw(GtkWidget *widget, cairo_t *crc, gpointer data)
   RECT r,cr;
 
   // don't use GetClientRect(),since we're getting it pre-NCCALCSIZE etc
-  
-#if SWELL_TARGET_GDK==2
-  { 
-    gint w=0,h=0; 
-    gdk_drawable_get_size(gdkwindow,&w,&h);
-    cr.right = w; cr.bottom = h;
-  }
-#else
   cr.right = gtk_widget_get_allocated_width(widget);
   cr.bottom = gtk_widget_get_allocated_height(widget);
-#endif
   cr.left=cr.top=0;
 
   double left, top, right, bottom;
@@ -237,19 +228,6 @@ static int swell_gdkConvertKey(int key)
   //gdk key to VK_ conversion
   switch(key)
   {
-#if SWELL_TARGET_GDK == 2
-  case GDK_Home: key = VK_HOME; break;
-  case GDK_End: key = VK_END; break;
-  case GDK_Up: key = VK_UP; break;
-  case GDK_Down: key = VK_DOWN; break;
-  case GDK_Left: key = VK_LEFT; break;
-  case GDK_Right: key = VK_RIGHT; break;
-  case GDK_Page_Up: key = VK_PRIOR; break;
-  case GDK_Page_Down: key = VK_NEXT; break;
-  case GDK_Insert: key = VK_INSERT; break;
-  case GDK_Delete: key = VK_DELETE; break;
-  case GDK_Escape: key = VK_ESCAPE; break;
-#else
   case GDK_KEY_Home: key = VK_HOME; break;
   case GDK_KEY_End: key = VK_END; break;
   case GDK_KEY_Up: key = VK_UP; break;
@@ -261,7 +239,6 @@ static int swell_gdkConvertKey(int key)
   case GDK_KEY_Insert: key = VK_INSERT; break;
   case GDK_KEY_Delete: key = VK_DELETE; break;
   case GDK_KEY_Escape: key = VK_ESCAPE; break;
-#endif
   }
   return key;
 }
@@ -495,7 +472,7 @@ HWND__::HWND__(HWND par, int wID, RECT *wndr, const char *label, bool visible, W
      m_enabled=true;
      m_wantfocus=true;
      m_menu=NULL;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
      m_oswindow = 0;
 #endif
 
@@ -757,7 +734,7 @@ void EnableWindow(HWND hwnd, int enable)
 {
   if (!hwnd) return;
   hwnd->m_enabled=!!enable;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (hwnd->m_oswindow) gtk_window_set_accept_focus(GTK_WINDOW(hwnd->m_oswindow),!!enable);
 #endif
 
@@ -770,7 +747,7 @@ void SetFocus(HWND hwnd)
   if (!hwnd) return;
 
   SWELL_g_focuswnd = hwnd;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   while (hwnd && !hwnd->m_oswindow) hwnd=hwnd->m_parent;
   if (hwnd) gtk_window_present(GTK_WINDOW(hwnd->m_oswindow));
   SWELL_g_focus_oswindow = hwnd->m_oswindow;
@@ -794,7 +771,7 @@ int IsChild(HWND hwndParent, HWND hwndChild)
 
 HWND GetForegroundWindowIncludeMenus()
 {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (!SWELL_g_focus_oswindow) return 0;
   HWND a = SWELL_topwindows;
   while (a && a->m_oswindow != SWELL_g_focus_oswindow) a=a->m_next;
@@ -808,7 +785,7 @@ HWND GetForegroundWindowIncludeMenus()
 
 HWND GetFocusIncludeMenus()
 {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (!SWELL_g_focus_oswindow) return 0;
   HWND a = SWELL_topwindows;
   while (a && a->m_oswindow != SWELL_g_focus_oswindow) a=a->m_next;
@@ -837,7 +814,7 @@ HWND GetFocus()
 
 void SWELL_GetViewPort(RECT *r, const RECT *sourcerect, bool wantWork)
 {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (swell_initwindowsys())
   {
     GdkScreen *defscr = gdk_screen_get_default();
@@ -867,7 +844,7 @@ void ScreenToClient(HWND hwnd, POINT *p)
 
   HWND tmp=hwnd, ltmp=0;
   while (tmp 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
             && !tmp->m_oswindow
 #endif
          ) // top level window's m_position left/top should always be 0 anyway
@@ -888,7 +865,7 @@ void ScreenToClient(HWND hwnd, POINT *p)
     y -= p.rgrc[0].top - tmp->m_position.top;
   }
 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (tmp && tmp->m_oswindow)
   {
     GdkWindow *wnd = gtk_widget_get_window(tmp->m_oswindow);
@@ -911,7 +888,7 @@ void ClientToScreen(HWND hwnd, POINT *p)
 
   HWND tmp=hwnd,ltmp=0;
   while (tmp 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
          && !tmp->m_oswindow
 #endif
          ) // top level window's m_position left/top should always be 0 anyway
@@ -930,7 +907,7 @@ void ClientToScreen(HWND hwnd, POINT *p)
     y += p.rgrc[0].top - tmp->m_position.top;
   }
 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (tmp && tmp->m_oswindow)
   {
     GdkWindow *wnd = gtk_widget_get_window(tmp->m_oswindow);
@@ -948,7 +925,7 @@ void ClientToScreen(HWND hwnd, POINT *p)
 bool GetWindowRect(HWND hwnd, RECT *r)
 {
   if (!hwnd) return false;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (hwnd->m_oswindow)
   {
     GdkRectangle rc;
@@ -970,17 +947,14 @@ bool GetWindowRect(HWND hwnd, RECT *r)
 
 void GetWindowContentViewRect(HWND hwnd, RECT *r)
 {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (hwnd && hwnd->m_oswindow) 
   {
     gint w=0,h=0,px=0,py=0;
     
     gtk_window_get_position(GTK_WINDOW(hwnd->m_oswindow),&px,&py);
-#if SWELL_TARGET_GDK==2
-    gdk_drawable_get_size(hwnd->m_oswindow,&w,&h);
-#else
     gtk_window_get_size(GTK_WINDOW(hwnd->m_oswindow), &w, &h);
-#endif
+
     r->left=px;
     r->top=py;
     r->right = px+w;
@@ -996,18 +970,10 @@ void GetClientRect(HWND hwnd, RECT *r)
   r->left=r->top=r->right=r->bottom=0;
   if (!hwnd) return;
   
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (hwnd->m_oswindow)
   {
-#if SWELL_TARGET_GDK==2
-    gint w=0, h=0;
-    gdk_drawable_get_size(hwnd->m_oswindow,&w,&h);
-    r->right = w;
-    r->bottom = h;
-#else
     gtk_window_get_size(GTK_WINDOW(hwnd->m_oswindow), &r->right, &r->bottom);
-#endif
-    
   }
   else
 #endif
@@ -1090,7 +1056,7 @@ void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flag
   }
   if (reposflag)
   {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
     if (hwnd->m_oswindow) 
     {
       //printf("repos %d,%d,%d,%d, %d\n",f.left,f.top,f.right,f.bottom,reposflag);
@@ -2985,7 +2951,7 @@ void UpdateWindow(HWND hwnd)
 {
   if (hwnd)
   {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
     while (hwnd && !hwnd->m_oswindow) hwnd=hwnd->m_parent;
     if (hwnd && hwnd->m_oswindow) gdk_window_process_updates(gtk_widget_get_window(hwnd->m_oswindow),true);
 #endif
@@ -3012,7 +2978,7 @@ BOOL InvalidateRect(HWND hwnd, const RECT *r, int eraseBk)
     }
   }
 #endif
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   GdkRectangle rect;
   if (r) { rect.x = r->left; rect.y = r->top; rect.width = r->right-r->left; rect.height = r->bottom - r->top; }
   else
@@ -3056,7 +3022,7 @@ HWND SetCapture(HWND hwnd)
   {
     s_captured_window=hwnd;
     if (oc) SendMessage(oc,WM_CAPTURECHANGED,0,(LPARAM)hwnd);
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
 // this doesnt seem to be necessary
 //    if (gdk_pointer_is_grabbed()) gdk_pointer_ungrab(GDK_CURRENT_TIME);
 //    while (hwnd && !hwnd->m_oswindow) hwnd=hwnd->m_parent;
@@ -3072,7 +3038,7 @@ void ReleaseCapture()
   {
     SendMessage(s_captured_window,WM_CAPTURECHANGED,0,0);
     s_captured_window=0;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
 //    if (gdk_pointer_is_grabbed()) gdk_pointer_ungrab(GDK_CURRENT_TIME);
 #endif
   }
@@ -3808,7 +3774,7 @@ void GetCursorPos(POINT *pt)
 {
   pt->x=0;
   pt->y=0;
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (SWELL_gdk_active>0)
     gdk_display_get_pointer(gdk_display_get_default(),NULL,&pt->x,&pt->y,NULL);
 #endif
@@ -3816,7 +3782,7 @@ void GetCursorPos(POINT *pt)
 
 WORD GetAsyncKeyState(int key)
 {
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   if (SWELL_gdk_active>0)
   {
     GdkModifierType mod=(GdkModifierType)0;

@@ -558,12 +558,14 @@ struct HDC__ {
 
 #endif
 
+#elif defined(SWELL_TARGET_GTK)
+
+#include <gtk/gtk.h>
 
 #elif defined(SWELL_TARGET_GDK)
 
 #include <gdk/gdk.h>
 #include <gdk/gdkkeysyms.h>
-#include <gtk/gtk.h>
 
 #else
 // generic 
@@ -595,8 +597,10 @@ struct HWND__
   const char *m_classname;
   
 
-#ifdef SWELL_TARGET_GDK
+#ifdef SWELL_TARGET_GTK
   GtkWidget *m_oswindow;
+#elif defined(SWELL_TARGET_GDK)
+  GdkWindow *m_oswindow;
 #endif
   char *m_title;
 
