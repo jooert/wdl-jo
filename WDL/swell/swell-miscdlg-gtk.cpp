@@ -220,7 +220,7 @@ char *BrowseForFiles(const char *text, const char *initialdir,
 
 int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
 {
-  GtkWidget* dialog = gtk_message_dialog_new(NULL,//hwndParent->m_oswindow,
+  GtkWidget* dialog = gtk_message_dialog_new((hwndParent && hwndParent->m_oswindow) ? GTK_WINDOW(hwndParent->m_oswindow) : NULL,
 					     GTK_DIALOG_DESTROY_WITH_PARENT,
 					     GTK_MESSAGE_OTHER,
 					     GTK_BUTTONS_NONE,

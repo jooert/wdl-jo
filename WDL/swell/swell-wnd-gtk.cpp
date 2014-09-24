@@ -157,15 +157,14 @@ static void swell_manageOSwindow(HWND hwnd, bool wantfocus)
     {
       if (swell_initwindowsys())
       {
-        //HWND owner = NULL; // hwnd->m_owner;
-// parent windows dont seem to work the way we'd want, yet, in gdk...
-/*        while (owner && !owner->m_oswindow)
+        HWND owner = hwnd->m_owner;
+
+        while (owner && !owner->m_oswindow)
         {
           if (owner->m_parent)  owner = owner->m_parent;
           else if (owner->m_owner) owner = owner->m_owner;
         }
-*/
- 
+
         RECT r = hwnd->m_position;
 	hwnd->m_oswindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	if (hwnd->m_oswindow) 
@@ -187,8 +186,11 @@ static void swell_manageOSwindow(HWND hwnd, bool wantfocus)
 	  g_signal_connect(hwnd->m_oswindow, "window-state-event", G_CALLBACK(swell_gdkEventHandler), NULL);
 	  g_signal_connect(hwnd->m_oswindow, "draw", G_CALLBACK(swell_gdkDraw), NULL);
  
-          if (!wantfocus) gtk_window_set_focus_on_map(GTK_WINDOW(hwnd->m_oswindow), false);
+          if (!wantfocus)
+	    gtk_window_set_focus_on_map(GTK_WINDOW(hwnd->m_oswindow), false);
 
+	  if (owner && owner->m_oswindow)
+	    gtk_window_set_transient_for(GTK_WINDOW(hwnd->m_oswindow), GTK_WINDOW(owner->m_oswindow));
           if (!(hwnd->m_style & WS_CAPTION)) 
           {
 	    gtk_window_set_decorated(GTK_WINDOW(hwnd->m_oswindow), false);
