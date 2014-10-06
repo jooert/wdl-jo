@@ -220,7 +220,14 @@ char *BrowseForFiles(const char *text, const char *initialdir,
 
 int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
 {
-  GtkWidget* dialog = gtk_message_dialog_new((hwndParent && hwndParent->m_oswindow) ? GTK_WINDOW(hwndParent->m_oswindow) : NULL,
+  // Get GTK parent, but only use it if it's a toplevel window
+  GtkWidget* parent = NULL;
+  if (hwndParent && hwndParent->m_oswindow)
+  {
+    parent = gtk_widget_get_parent(hwndParent->m_oswindow);
+  }
+
+  GtkWidget* dialog = gtk_message_dialog_new(gtk_widget_is_toplevel(parent) ? GTK_WINDOW(parent) : NULL,
 					     GTK_DIALOG_DESTROY_WITH_PARENT,
 					     GTK_MESSAGE_OTHER,
 					     GTK_BUTTONS_NONE,
@@ -251,10 +258,9 @@ int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
   }
 
   int result = gtk_dialog_run(GTK_DIALOG(dialog));
-  if(result == GTK_RESPONSE_NONE)
-  {
+  if (result == GTK_RESPONSE_NONE)
     result = 0;
-  }
+
   gtk_widget_destroy(dialog);
   return result;
 }
