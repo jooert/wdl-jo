@@ -411,6 +411,7 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
     gtk_container_add(GTK_CONTAINER(toplevel), h->m_oswindow);
     g_signal_connect(toplevel, "delete-event", G_CALLBACK(swell_gtkDeleteEvent), h);
     g_signal_connect(toplevel, "configure-event", G_CALLBACK(swell_gtkConfigureEvent), h);
+    g_object_set_data(G_OBJECT(h->m_oswindow), "toplevel", toplevel);
 
     // Set position and size
     gtk_window_move(GTK_WINDOW(toplevel), r.left, r.top);

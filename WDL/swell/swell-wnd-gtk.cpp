@@ -83,8 +83,8 @@ static void swell_destroyOSwindow(HWND hwnd)
     if (SWELL_g_focus_oswindow == hwnd->m_oswindow) SWELL_g_focus_oswindow=NULL;
 
     // Check if parent is toplevel => delete toplevel
-    GtkWidget *toplevel = gtk_widget_get_parent(hwnd->m_oswindow);
-    if (gtk_widget_is_toplevel(toplevel))
+    GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+    if (toplevel)
       gtk_widget_destroy(toplevel);
     else
       gtk_widget_destroy(hwnd->m_oswindow);
@@ -101,8 +101,8 @@ static void swell_setOSwindowtext(HWND hwnd)
   if (!hwnd || !hwnd->m_oswindow)
     return;
 
-  GtkWidget *toplevel = gtk_widget_get_parent(hwnd->m_oswindow);
-  if (gtk_widget_is_toplevel(toplevel))
+  GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+  if (toplevel)
   {
     gtk_window_set_title(GTK_WINDOW(toplevel), hwnd->m_title ? hwnd->m_title : (char*)"");
   }
@@ -603,8 +603,8 @@ bool GetWindowRect(HWND hwnd, RECT *r)
 
   if (hwnd && hwnd->m_oswindow) 
   {
-    GtkWidget *toplevel = gtk_widget_get_parent(hwnd->m_oswindow);
-    if(gtk_widget_is_toplevel(toplevel))
+    GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+    if (toplevel)
     {
       gint w=0,h=0,px=0,py=0;
     
@@ -707,14 +707,14 @@ void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flag
 
     if (hwnd->m_oswindow)
     {
-      GtkWidget *parent = gtk_widget_get_parent(hwnd->m_oswindow);
-      if (gtk_widget_is_toplevel(parent))
+      GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+      if (toplevel)
       {
-	gtk_window_move(GTK_WINDOW(parent), x, y);
+	gtk_window_move(GTK_WINDOW(toplevel), x, y);
       }
       else
       {
-	gtk_fixed_move(GTK_FIXED(parent), hwnd->m_oswindow, x, y);
+	gtk_fixed_move(GTK_FIXED(gtk_widget_get_parent(hwnd->m_oswindow)), hwnd->m_oswindow, x, y);
 	SendMessage(hwnd, WM_MOVE, 0, MAKELPARAM(x, y));
 	hwnd->m_position = f;
       }
@@ -734,10 +734,10 @@ void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flag
 
     if (hwnd->m_oswindow) 
     {
-      GtkWidget *parent = gtk_widget_get_parent(hwnd->m_oswindow);
-      if (gtk_widget_is_toplevel(parent))
+      GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+      if (toplevel)
       {
-	gtk_window_resize(GTK_WINDOW(parent), cx, cy);
+	gtk_window_resize(GTK_WINDOW(toplevel), cx, cy);
       }
       else
       {
@@ -822,8 +822,12 @@ HWND SetParent(HWND hwnd, HWND newPar)
       g_object_unref(hwnd->m_oswindow);
 
       // If old parent was toplevel window, destroy it
-      if (gtk_widget_is_toplevel(gtkparent))
-	gtk_widget_destroy(gtkparent);
+      GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+      if (toplevel)
+      {
+	g_object_set_data(G_OBJECT(hwnd->m_oswindow), "toplevel", NULL);
+	gtk_widget_destroy(toplevel);
+      }
     }
   }
   else // add to top level windows
@@ -1060,15 +1064,8 @@ void ShowWindow(HWND hwnd, int cmd)
     {
       gtk_widget_show(hwnd->m_oswindow);
 
-      GtkWidget *fixed = gtk_bin_get_child(GTK_BIN(hwnd->m_oswindow));
-      if(fixed)
-      {
-	//if(hwnd->m_title && strcmp(hwnd->m_title, "REAPER v4.61/posix64 (initializing)"))
-	gtk_widget_show(fixed);
-      }
-
-      GtkWidget *toplevel = gtk_widget_get_parent(hwnd->m_oswindow);
-      if (gtk_widget_is_toplevel(toplevel))
+      GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+      if (toplevel)
 	gtk_widget_show(toplevel);
     }
   }
@@ -1079,8 +1076,8 @@ void ShowWindow(HWND hwnd, int cmd)
     {
       gtk_widget_hide(hwnd->m_oswindow);
 
-      GtkWidget *toplevel = gtk_widget_get_parent(hwnd->m_oswindow);
-      if (gtk_widget_is_toplevel(toplevel))
+      GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
+      if (toplevel)
 	gtk_widget_hide(toplevel);
     }
   }
