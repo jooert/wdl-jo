@@ -141,21 +141,107 @@ static gboolean swell_gtkDeleteEvent(GtkWidget *widget, GdkEvent *event, gpointe
   return TRUE;
 }
 
-static gboolean swell_gtkConfigureEvent(GtkWidget *widget, GdkEvent *event, gpointer data)
+void swell_gtkSizeAllocate(GtkWidget *widget, GdkRectangle *rect, gpointer data)
 {
   HWND hwnd = (HWND)data;
 
-  GdkEventConfigure *cfg = (GdkEventConfigure*)event;
   int flag=0;
-  if (cfg->x != hwnd->m_position.left || cfg->y != hwnd->m_position.top)  flag|=1;
-  if (cfg->width != hwnd->m_position.right-hwnd->m_position.left || cfg->height != hwnd->m_position.bottom - hwnd->m_position.top) flag|=2;
-  hwnd->m_position.left = cfg->x;
-  hwnd->m_position.top = cfg->y;
-  hwnd->m_position.right = cfg->x + cfg->width;
-  hwnd->m_position.bottom = cfg->y + cfg->height;
+  if (rect->x != hwnd->m_position.left || rect->y != hwnd->m_position.top)  flag|=1;
+  if (rect->width != hwnd->m_position.right-hwnd->m_position.left || rect->height != hwnd->m_position.bottom - hwnd->m_position.top) flag|=2;
+  hwnd->m_position.left = rect->x;
+  hwnd->m_position.top = rect->y;
+  hwnd->m_position.right = rect->x + rect->width;
+  hwnd->m_position.bottom = rect->y + rect->height;
 
-  if (flag&1) SendMessage(hwnd, WM_MOVE, 0, MAKELPARAM(cfg->x, cfg->y));
-  if (flag&2) SendMessage(hwnd, WM_SIZE, 0, MAKELPARAM(cfg->width, cfg->height));
+  if (flag&1) SendMessage(hwnd, WM_MOVE, 0, MAKELPARAM(rect->x, rect->y));
+  if (flag&2) SendMessage(hwnd, WM_SIZE, 0, MAKELPARAM(rect->width, rect->height));
+}
+
+static gboolean swell_gtkButtonEvent(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+  HWND hwnd = (HWND)data;
+
+  GdkEventButton *b = (GdkEventButton *)event;
+  s_lastMessagePos = MAKELONG(((int)b->x_root&0xffff),((int)b->y_root&0xffff));
+
+  // POINT p={b->x, b->y};
+  // HWND hwnd2 = GetCapture();
+  // if (!hwnd2)
+  //   hwnd2=ChildWindowFromPoint(hwnd, p);
+
+  // POINT p2={b->x_root, b->y_root};
+  // ScreenToClient(hwnd2, &p2);
+
+  int msg=WM_LBUTTONDOWN;
+  if (b->button==2)
+    msg=WM_MBUTTONDOWN;
+  else if (b->button==3)
+    msg=WM_RBUTTONDOWN;
+            
+  // if (hwnd && hwnd->m_oswindow && 
+  // 	  SWELL_g_focus_oswindow != hwnd->m_oswindow)
+  // 	SWELL_g_focus_oswindow = hwnd->m_oswindow;
+
+  if(event->type == GDK_BUTTON_RELEASE)
+    msg++; // move from down to up
+  else if(event->type == GDK_2BUTTON_PRESS)
+    msg+=2; // move from down to up
+
+  // if (hwnd2) hwnd2->Retain();
+  // SendMouseMessage(hwnd2, msg, 0, MAKELPARAM(p2.x, p2.y));
+  // if (hwnd2) hwnd2->Release();
+
+  hwnd->Retain();
+  SendMouseMessage(hwnd, msg, 0, MAKELPARAM(b->x, b->y));
+  hwnd->Release();
+
+  return TRUE;
+}
+
+static gboolean swell_gtkMotionEvent(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+  HWND hwnd = (HWND)data;
+  GdkEventMotion *m = (GdkEventMotion *)event;
+  s_lastMessagePos = MAKELONG(((int)m->x_root&0xffff),((int)m->y_root&0xffff));
+
+  // POINT p={m->x, m->y};
+  // HWND hwnd2 = GetCapture();
+  // if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
+
+  // POINT p2={m->x_root, m->y_root};
+  // ScreenToClient(hwnd2, &p2);
+
+  // if (hwnd2) hwnd2->Retain();
+  // SendMouseMessage(hwnd2, WM_MOUSEMOVE, 0, MAKELPARAM(p2.x, p2.y));
+  // if (hwnd2) hwnd2->Release();
+
+  hwnd->Retain();
+  SendMouseMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(m->x, m->y));
+  hwnd->Release();
+  // gdk_event_request_motions(m);
+  return TRUE;
+}
+
+static gboolean swell_gtkKeyEvent(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+  // todo: pass through app-specific default processing before sending to child window
+  HWND hwnd = (HWND)data;
+  GdkEventKey *k = (GdkEventKey *)event;
+
+  int modifiers = FVIRTKEY;
+  if (k->state&GDK_SHIFT_MASK) modifiers|=FSHIFT;
+  if (k->state&GDK_CONTROL_MASK) modifiers|=FCONTROL;
+  if (k->state&GDK_MOD1_MASK) modifiers|=FALT;
+
+  int kv = swell_gdkConvertKey(k->keyval);
+  kv=toupper(kv);
+  printf("Key pressed %c\n",kv);
+
+  //HWND foc = GetFocus();
+  //if (foc && IsChild(hwnd,foc)) hwnd=foc;
+  MSG msg = { hwnd, event->type == GDK_KEY_PRESS ? WM_KEYDOWN : WM_KEYUP, kv, modifiers, };
+  if (SWELLAppMain(SWELLAPP_PROCESSMESSAGE,(INT_PTR)&msg,0)<=0)
+    SendMessage(msg.hwnd, msg.message, msg.wParam, msg.lParam);
 
   return TRUE;
 }
@@ -185,82 +271,6 @@ static void swell_gdkEventHandler(GtkWidget *widget, GdkEvent *evt, gpointer dat
   // 	}
   //   }
   //   break;
-  case GDK_KEY_PRESS:
-  case GDK_KEY_RELEASE:
-    { // todo: pass through app-specific default processing before sending to child window
-      GdkEventKey *k = (GdkEventKey *)evt;
-      //printf("key%s: %d %s\n", evt->type == GDK_KEY_PRESS ? "down" : "up", k->keyval, k->string);
-      int modifiers = FVIRTKEY;
-      if (k->state&GDK_SHIFT_MASK) modifiers|=FSHIFT;
-      if (k->state&GDK_CONTROL_MASK) modifiers|=FCONTROL;
-      if (k->state&GDK_MOD1_MASK) modifiers|=FALT;
-
-      int kv = swell_gdkConvertKey(k->keyval);
-      kv=toupper(kv);
-
-      HWND foc = GetFocus();
-      if (foc && IsChild(hwnd,foc)) hwnd=foc;
-      MSG msg = { hwnd, evt->type == GDK_KEY_PRESS ? WM_KEYDOWN : WM_KEYUP, kv, modifiers, };
-      if (SWELLAppMain(SWELLAPP_PROCESSMESSAGE,(INT_PTR)&msg,0)<=0)
-	SendMessage(msg.hwnd, msg.message, msg.wParam, msg.lParam);
-    }
-    break;
-  case GDK_MOTION_NOTIFY:
-    {
-      GdkEventMotion *m = (GdkEventMotion *)evt;
-      s_lastMessagePos = MAKELONG(((int)m->x_root&0xffff),((int)m->y_root&0xffff));
-      //            printf("motion %d %d %d %d\n", (int)m->x, (int)m->y, (int)m->x_root, (int)m->y_root); 
-      POINT p={m->x, m->y};
-      HWND hwnd2 = GetCapture();
-      if (!hwnd2) hwnd2=ChildWindowFromPoint(hwnd, p);
-      //char buf[1024];
-      //GetWindowText(hwnd2,buf,sizeof(buf));
-      //           printf("%x %s\n", hwnd2,buf);
-      POINT p2={m->x_root, m->y_root};
-      ScreenToClient(hwnd2, &p2);
-      //printf("%d %d\n", p2.x, p2.y);
-      if (hwnd2) hwnd2->Retain();
-      SendMouseMessage(hwnd2, WM_MOUSEMOVE, 0, MAKELPARAM(p2.x, p2.y));
-      if (hwnd2) hwnd2->Release();
-      gdk_event_request_motions(m);
-    }
-    break;
-  case GDK_BUTTON_PRESS:
-  case GDK_2BUTTON_PRESS:
-  case GDK_BUTTON_RELEASE:
-    {
-      //printf("ButtonEvent for %s\n", hwnd->m_title);
-      GdkEventButton *b = (GdkEventButton *)evt;
-      s_lastMessagePos = MAKELONG(((int)b->x_root&0xffff),((int)b->y_root&0xffff));
-
-      POINT p={b->x, b->y};
-      HWND hwnd2 = GetCapture();
-      if (!hwnd2)
-	hwnd2=ChildWindowFromPoint(hwnd, p);
-
-      POINT p2={b->x_root, b->y_root};
-      ScreenToClient(hwnd2, &p2);
-
-      int msg=WM_LBUTTONDOWN;
-      if (b->button==2)
-	msg=WM_MBUTTONDOWN;
-      else if (b->button==3)
-	msg=WM_RBUTTONDOWN;
-            
-      // if (hwnd && hwnd->m_oswindow && 
-      // 	  SWELL_g_focus_oswindow != hwnd->m_oswindow)
-      // 	SWELL_g_focus_oswindow = hwnd->m_oswindow;
-
-      if(evt->type == GDK_BUTTON_RELEASE)
-	msg++; // move from down to up
-      else if(evt->type == GDK_2BUTTON_PRESS)
-	msg+=2; // move from down to up
-
-      if (hwnd2) hwnd2->Retain();
-      SendMouseMessage(hwnd2, msg, 0, MAKELPARAM(p2.x, p2.y));
-      if (hwnd2) hwnd2->Release();
-    }
-    break;
   default:
     //printf("msg: %d\n",evt->type);
     break;
@@ -380,7 +390,6 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
 
   // Create GtkEventBox for dialog windows
   GtkWidget *event_box = gtk_event_box_new();
-  gtk_widget_set_app_paintable(event_box, TRUE);
 
   // Child or top level window?
   if (!forceNonChild && parent && (!p || (p->windowTypeFlags&SWELL_DLG_WS_CHILD)))
@@ -398,6 +407,7 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
     }
     // Add child window to parent at specified position
     gtk_fixed_put(GTK_FIXED(fixed), h->m_oswindow, r.left, r.top);
+    gtk_widget_set_size_request(h->m_oswindow, r.right-r.left, r.bottom-r.top);
   } 
   else 
   {
@@ -410,12 +420,12 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
     GtkWidget *toplevel = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_container_add(GTK_CONTAINER(toplevel), h->m_oswindow);
     g_signal_connect(toplevel, "delete-event", G_CALLBACK(swell_gtkDeleteEvent), h);
-    g_signal_connect(toplevel, "configure-event", G_CALLBACK(swell_gtkConfigureEvent), h);
+    g_signal_connect(h->m_oswindow, "size-allocate", G_CALLBACK(swell_gtkSizeAllocate), h);
     g_object_set_data(G_OBJECT(h->m_oswindow), "toplevel", toplevel);
 
-    // Set position and size
+    // Set position and size (r is in screen coordinates)
     gtk_window_move(GTK_WINDOW(toplevel), r.left, r.top);
-    gtk_widget_set_size_request(h->m_oswindow, r.right-r.left, r.bottom-r.top);
+    gtk_window_resize(GTK_WINDOW(toplevel), r.right-r.left, r.bottom-r.top);
 
     // Set several options for window
     /*if (h->m_owner && h->m_owner->m_oswindow)
@@ -431,13 +441,13 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
   }
 
   // Connect events
-  //gtk_widget_add_events(h->m_oswindow, GDK_ALL_EVENTS_MASK);
-  g_signal_connect(h->m_oswindow, "button-press-event", G_CALLBACK(swell_gdkEventHandler), h);
-  g_signal_connect(h->m_oswindow, "button-release-event", G_CALLBACK(swell_gdkEventHandler), h);
+  //gtk_widget_add_events(h->m_oswindow, GDK_KEY_PRESS_MASK);
+  g_signal_connect(h->m_oswindow, "button-press-event", G_CALLBACK(swell_gtkButtonEvent), h);
+  g_signal_connect(h->m_oswindow, "button-release-event", G_CALLBACK(swell_gtkButtonEvent), h);
   g_signal_connect(h->m_oswindow, "grab-broken-event", G_CALLBACK(swell_gdkEventHandler), h);
-  g_signal_connect(h->m_oswindow, "key-press-event", G_CALLBACK(swell_gdkEventHandler), h);
-  g_signal_connect(h->m_oswindow, "key-release-event", G_CALLBACK(swell_gdkEventHandler), h);
-  g_signal_connect(h->m_oswindow, "motion-notify-event", G_CALLBACK(swell_gdkEventHandler), h);
+  g_signal_connect(h->m_oswindow, "key-press-event", G_CALLBACK(swell_gtkKeyEvent), h);
+  g_signal_connect(h->m_oswindow, "key-release-event", G_CALLBACK(swell_gtkKeyEvent), h);
+  g_signal_connect(h->m_oswindow, "motion-notify-event", G_CALLBACK(swell_gtkMotionEvent), h);
   g_signal_connect(h->m_oswindow, "window-state-event", G_CALLBACK(swell_gdkEventHandler), h);
   g_signal_connect(h->m_oswindow, "draw", G_CALLBACK(swell_gtkDraw), h);
 

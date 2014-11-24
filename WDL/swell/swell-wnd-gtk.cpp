@@ -48,6 +48,7 @@ HWND SWELL_g_focuswnd; // update from focus-in-event / focus-out-event signals, 
 
 static GtkWidget *SWELL_g_focus_oswindow;
 static int SWELL_gdk_active;
+void swell_gtkSizeAllocate(GtkWidget *widget, GdkRectangle *rect, gpointer data);
 
 void SWELL_initargs(int *argc, char ***argv) 
 {
@@ -601,7 +602,7 @@ bool GetWindowRect(HWND hwnd, RECT *r)
 {
   if (!hwnd) return false;
 
-  if (hwnd && hwnd->m_oswindow) 
+  if (hwnd->m_oswindow)
   {
     GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
     if (toplevel)
@@ -615,6 +616,7 @@ bool GetWindowRect(HWND hwnd, RECT *r)
       r->top=py;
       r->right = px+w;
       r->bottom = py+h;
+
       return true;
     }
   }
@@ -628,7 +630,11 @@ bool GetWindowRect(HWND hwnd, RECT *r)
 
 void GetWindowContentViewRect(HWND hwnd, RECT *r)
 {
-  GetWindowRect(hwnd,r);
+  r->left=r->top=r->right=r->bottom=0;
+  if (!hwnd) return;
+
+  r->right = hwnd->m_position.right - hwnd->m_position.left;
+  r->bottom = hwnd->m_position.bottom - hwnd->m_position.top;
 }
 
 void GetClientRect(HWND hwnd, RECT *r)
@@ -650,7 +656,7 @@ void GetClientRect(HWND hwnd, RECT *r)
 void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flags)
 {
   if (!hwnd) return;
- // todo: handle SWP_SHOWWINDOW
+  // todo: handle SWP_SHOWWINDOW
   RECT f = hwnd->m_position;
   int reposflag = 0;
   if (!(flags&SWP_NOZORDER))
@@ -737,6 +743,7 @@ void SetWindowPos(HWND hwnd, HWND zorder, int x, int y, int cx, int cy, int flag
       GtkWidget *toplevel = (GtkWidget*)g_object_get_data(G_OBJECT(hwnd->m_oswindow), "toplevel");
       if (toplevel)
       {
+	// cx, cy are in screen coordinates
 	gtk_window_resize(GTK_WINDOW(toplevel), cx, cy);
       }
       else
@@ -826,6 +833,7 @@ HWND SetParent(HWND hwnd, HWND newPar)
       if (toplevel)
       {
 	g_object_set_data(G_OBJECT(hwnd->m_oswindow), "toplevel", NULL);
+	g_signal_handlers_disconnect_by_func(hwnd->m_oswindow, (gpointer)swell_gtkSizeAllocate, hwnd);
 	gtk_widget_destroy(toplevel);
       }
     }
@@ -2820,52 +2828,6 @@ LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
   const int menubar_xspacing=5;
   switch (msg)
   {
-    case WM_NCCALCSIZE:
-      if (!hwnd->m_parent && hwnd->m_menu)
-      {
-        RECT *r = (RECT*)lParam;
-        r->top += menubar_size;
-      }
-    break;
-    case WM_NCPAINT:
-      if (!hwnd->m_parent && hwnd->m_menu)
-      {
-        HDC dc = GetWindowDC(hwnd);
-        if (dc)
-        {
-          RECT r;
-          GetWindowContentViewRect(hwnd,&r);
-          r.right -= r.left; r.left=0;
-          r.bottom -= r.top; r.top=0;
-          if (r.bottom>menubar_size) r.bottom=menubar_size;
-
-          HBRUSH br=CreateSolidBrush(GetSysColor(COLOR_3DFACE));
-          FillRect(dc,&r,br);
-          DeleteObject(br);
-
-          SetBkMode(dc,TRANSPARENT);
-          int cols[2]={ GetSysColor(COLOR_BTNTEXT),GetSysColor(COLOR_3DHILIGHT)};
-
-          int x,xpos=0;
-          HMENU__ *menu = (HMENU__*)hwnd->m_menu;
-          for(x=0;x<menu->items.GetSize();x++)
-          {
-            MENUITEMINFO *inf = menu->items.Get(x);
-            if (inf->fType == MFT_STRING && inf->dwTypeData)
-            {
-              bool dis = !!(inf->fState & MF_GRAYED);
-              SetTextColor(dc,cols[dis]);
-              RECT cr=r; cr.left=cr.right=xpos;
-              DrawText(dc,inf->dwTypeData,-1,&cr,DT_CALCRECT);
-              DrawText(dc,inf->dwTypeData,-1,&cr,DT_VCENTER|DT_LEFT);
-              xpos=cr.right+menubar_xspacing;
-            }
-          }
-
-          ReleaseDC(hwnd,dc);
-        }
-      }
-    break;
     case WM_RBUTTONUP:
     case WM_NCRBUTTONUP:
       {  
@@ -2882,7 +2844,7 @@ LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return 1;
 //    case WM_NCLBUTTONDOWN:
     case WM_NCLBUTTONUP:
-      if (!hwnd->m_parent && hwnd->m_menu)
+      /*if (!hwnd->m_parent && hwnd->m_menu)
       {
         RECT r;
         GetWindowContentViewRect(hwnd,&r);
@@ -2917,15 +2879,15 @@ LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           
           if (dc) ReleaseDC(hwnd,dc);
         }
-      }
+	}*/
     break;
     case WM_NCHITTEST: 
-      if (!hwnd->m_parent && hwnd->m_menu)
+      /*if (!hwnd->m_parent && hwnd->m_menu)
       {
         RECT r;
         GetWindowContentViewRect(hwnd,&r);
         if (GET_Y_LPARAM(lParam)>=r.top && GET_Y_LPARAM(lParam) < r.top+menubar_size) return HTMENU;
-      }
+	}*/
       // todo: WM_NCCALCSIZE etc
     return HTCLIENT;
     case WM_KEYDOWN:

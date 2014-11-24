@@ -639,16 +639,29 @@ struct HWND__
 
 struct HMENU__
 {
-  HMENU__() { }
-  ~HMENU__() { items.Empty(true,freeMenuItem); }
+  HMENU__()
+  {
+#ifdef SWELL_TARGET_GTK
+    gtk_menu = NULL;
+#endif
+  }
+  ~HMENU__()
+  {
+    items.Empty(true,freeMenuItem);
+#ifdef SWELL_TARGET_GTK
+    if(GTK_IS_WIDGET(gtk_menu)) gtk_widget_destroy(gtk_menu);
+#endif
+  }
 
   WDL_PtrList<MENUITEMINFO> items;
+#ifdef SWELL_TARGET_GTK
+  GtkWidget *gtk_menu;
+#endif
 
   HMENU__ *Duplicate();
   static void freeMenuItem(void *p);
 
 };
-
 
 struct HGDIOBJ__
 {

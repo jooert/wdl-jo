@@ -224,7 +224,7 @@ int MessageBox(HWND hwndParent, const char *text, const char *caption, int type)
   GtkWidget* parent = NULL;
   if (hwndParent && hwndParent->m_oswindow)
   {
-    parent = gtk_widget_get_parent(hwndParent->m_oswindow);
+    parent = (GtkWidget*)g_object_get_data(G_OBJECT(hwndParent->m_oswindow), "toplevel");
   }
 
   GtkWidget* dialog = gtk_message_dialog_new(gtk_widget_is_toplevel(parent) ? GTK_WINDOW(parent) : NULL,
