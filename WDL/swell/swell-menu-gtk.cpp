@@ -587,7 +587,13 @@ HMENU GetMenu(HWND hwnd)
   return hwnd->m_menu;
 }
 
-static void swell_fillGtkMenu(HMENU menu, GtkWidget *gtk_menu)
+static void swell_gtkMenuItemActivate(GtkMenuItem *menuitem, gpointer data)
+{
+  SendMessage((HWND)data, WM_COMMAND,
+	      GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(menuitem), "wID")), 0);
+}
+
+static void swell_fillGtkMenu(HWND hwnd, HMENU menu, GtkWidget *gtk_menu)
 {
   // TODO: Implement bitmaps and item state
 
@@ -623,14 +629,23 @@ static void swell_fillGtkMenu(HMENU menu, GtkWidget *gtk_menu)
       break;
     }
 
-    if (mi->hSubMenu)
+    if (gi)
     {
-      GtkWidget *submenu = gtk_menu_new();
-      gtk_menu_item_set_submenu(GTK_MENU_ITEM(gi), submenu);
-      swell_fillGtkMenu(mi->hSubMenu, submenu);
-    }
+      gtk_menu_shell_append(GTK_MENU_SHELL(gtk_menu), gi);
 
-    if(gi) gtk_menu_shell_append(GTK_MENU_SHELL(gtk_menu), gi);
+      if (mi->wID)
+      {
+	g_object_set_data(G_OBJECT(gi), "wID", GUINT_TO_POINTER(mi->wID));
+	g_signal_connect(gi, "activate", G_CALLBACK(swell_gtkMenuItemActivate), hwnd);
+      }
+
+      if (mi->hSubMenu)
+      {
+	GtkWidget *submenu = gtk_menu_new();
+	gtk_menu_item_set_submenu(GTK_MENU_ITEM(gi), submenu);
+	swell_fillGtkMenu(hwnd, mi->hSubMenu, submenu);
+      }
+    }
   }
 }
 void DrawMenuBar(HWND hwnd)
@@ -648,7 +663,7 @@ void DrawMenuBar(HWND hwnd)
     g_list_free(children);
 
     // Refill menu with items from WDL_PtrList
-    swell_fillGtkMenu(menu, gtk_menu);
+    swell_fillGtkMenu(hwnd, menu, gtk_menu);
     gtk_widget_show_all(gtk_menu);
   }
 
