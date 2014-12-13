@@ -108,7 +108,15 @@ static void swell_fillGtkMenu(HMENU menu, GtkWidget *gtk_menu, GCallback callbac
 	    newstring[i] = (mi->dwTypeData[i] == '&') ? '_' : mi->dwTypeData[i];
 	  }
 	newstring[length] = '\0';
-	gi = gtk_menu_item_new_with_mnemonic(newstring);
+
+	if (mi->fState & MFS_CHECKED)
+	{
+	  gi = gtk_check_menu_item_new_with_mnemonic(newstring);
+	  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(gi), TRUE);
+	}
+	else
+	  gi = gtk_menu_item_new_with_mnemonic(newstring);
+
 	free(newstring);
       }
       else
