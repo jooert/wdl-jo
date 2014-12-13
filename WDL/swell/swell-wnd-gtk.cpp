@@ -2824,8 +2824,6 @@ BOOL EndPaint(HWND hwnd, PAINTSTRUCT *ps)
 
 LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-  const int menubar_size=12; // big for testing
-  const int menubar_xspacing=5;
   switch (msg)
   {
     case WM_RBUTTONUP:
@@ -2842,54 +2840,8 @@ LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SendMessage(hwnd,WM_CONTEXTMENU,(WPARAM)hwndDest,(p.x&0xffff)|(p.y<<16));
       }
     return 1;
-//    case WM_NCLBUTTONDOWN:
-    case WM_NCLBUTTONUP:
-      /*if (!hwnd->m_parent && hwnd->m_menu)
-      {
-        RECT r;
-        GetWindowContentViewRect(hwnd,&r);
-        if (GET_Y_LPARAM(lParam)>=r.top && GET_Y_LPARAM(lParam) < r.top+menubar_size) 
-        {
-          HDC dc = GetWindowDC(hwnd);
-
-          int x,xpos=r.left;
-          HMENU__ *menu = (HMENU__*)hwnd->m_menu;
-          for(x=0;x<menu->items.GetSize();x++)
-          {
-            MENUITEMINFO *inf = menu->items.Get(x);
-            if (inf->fType == MFT_STRING && inf->dwTypeData)
-            {
-              bool dis = !!(inf->fState & MF_GRAYED);
-              RECT cr=r; cr.left=cr.right=xpos;
-              DrawText(dc,inf->dwTypeData,-1,&cr,DT_CALCRECT);
-
-              if (GET_X_LPARAM(lParam) >=cr.left && GET_X_LPARAM(lParam)<=cr.right)
-              {
-                if (!dis)
-                {
-                  if (inf->hSubMenu) TrackPopupMenu(inf->hSubMenu,0,xpos,r.top+menubar_size,0,hwnd,NULL);
-                  else if (inf->wID) SendMessage(hwnd,WM_COMMAND,inf->wID,0);
-                }
-                break;
-              }
-
-              xpos=cr.right+menubar_xspacing;
-            }
-          }
-          
-          if (dc) ReleaseDC(hwnd,dc);
-        }
-	}*/
-    break;
-    case WM_NCHITTEST: 
-      /*if (!hwnd->m_parent && hwnd->m_menu)
-      {
-        RECT r;
-        GetWindowContentViewRect(hwnd,&r);
-        if (GET_Y_LPARAM(lParam)>=r.top && GET_Y_LPARAM(lParam) < r.top+menubar_size) return HTMENU;
-	}*/
-      // todo: WM_NCCALCSIZE etc
-    return HTCLIENT;
+    case WM_NCHITTEST:
+      return HTCLIENT;
     case WM_KEYDOWN:
     case WM_KEYUP: return 69;
     case WM_CONTEXTMENU:
