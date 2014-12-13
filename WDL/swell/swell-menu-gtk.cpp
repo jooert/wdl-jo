@@ -122,6 +122,9 @@ static void swell_fillGtkMenu(HMENU menu, GtkWidget *gtk_menu, GCallback callbac
     {
       gtk_menu_shell_append(GTK_MENU_SHELL(gtk_menu), gi);
 
+      if (mi->fState & MFS_DISABLED)
+	gtk_widget_set_sensitive(gi, FALSE);
+
       if (mi->wID)
       {
 	g_object_set_data(G_OBJECT(gi), "wID", GUINT_TO_POINTER(mi->wID));
