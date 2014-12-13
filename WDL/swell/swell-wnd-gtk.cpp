@@ -500,7 +500,7 @@ HWND GetForegroundWindow()
 {
   HWND h =GetForegroundWindowIncludeMenus();
   HWND ho;
-  while (h && (ho=(HWND)GetProp(h,"SWELL_MenuOwner"))) h=ho; 
+  while (h && (ho=(HWND)GetProp(h,"SWELL_MenuOwner"))) h=ho;
   return h;
 }
 
@@ -508,7 +508,7 @@ HWND GetFocus()
 {
   HWND h =GetFocusIncludeMenus();
   HWND ho;
-  while (h && (ho=(HWND)GetProp(h,"SWELL_MenuOwner"))) h=ho; 
+  while (h && (ho=(HWND)GetProp(h,"SWELL_MenuOwner"))) h=ho;
   return h;
 }
 
@@ -1362,7 +1362,7 @@ static LRESULT WINAPI buttonWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             {
               int st = (int)(hwnd->m_private_data&3);
               if (st==3||(st==2 && (hwnd->m_style & 0xf) == BS_AUTOCHECKBOX)) st=1;
-              
+
               HBRUSH br = CreateSolidBrush(st==2?RGB(192,192,192):RGB(255,255,255));
               FillRect(ps.hdc,&tr,br);
               DeleteObject(br);
@@ -1374,8 +1374,8 @@ static LRESULT WINAPI buttonWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 ar.right-=3;
                 ar.top+=2;
                 ar.bottom-=3;
-                if (pressed) 
-                { 
+                if (pressed)
+                {
                   const int rsz=chksz/4;
                   ar.left+=rsz;
                   ar.top+=rsz;
@@ -1416,7 +1416,7 @@ static LRESULT WINAPI buttonWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             DeleteObject(pen);
             DeleteObject(pen2);
             f|=DT_CENTER;
-            if (pressed) 
+            if (pressed)
             {
               r.left+=2;
               r.top+=2;
@@ -1446,7 +1446,7 @@ static LRESULT WINAPI buttonWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         int check = (int)wParam;
         INT_PTR op = hwnd->m_private_data;
         hwnd->m_private_data=(check > 2 || check<0 ? 1 : (check&3)) | (hwnd->m_private_data&~3);
-        if (hwnd->m_private_data == op) break; 
+        if (hwnd->m_private_data == op) break;
       }
       else
       {
@@ -1484,19 +1484,19 @@ static LRESULT WINAPI groupWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
   switch (msg)
   {
     case WM_PAINT:
-      { 
+      {
         PAINTSTRUCT ps;
         if (BeginPaint(hwnd,&ps))
         {
-          RECT r; 
-          GetClientRect(hwnd,&r); 
+          RECT r;
+          GetClientRect(hwnd,&r);
           int col = GetSysColor(COLOR_BTNTEXT);
 
           const char *buf = hwnd->m_title;
           int th=20;
           int tw=0;
           int xp=0;
-          if (buf && buf[0]) 
+          if (buf && buf[0])
           {
             RECT tr={0,};
             DrawText(ps.hdc,buf,-1,&tr,DT_CALCRECT);
@@ -1590,12 +1590,12 @@ static LRESULT WINAPI labelWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
   switch (msg)
   {
     case WM_PAINT:
-      { 
+      {
         PAINTSTRUCT ps;
         if (BeginPaint(hwnd,&ps))
         {
-          RECT r; 
-          GetClientRect(hwnd,&r); 
+          RECT r;
+          GetClientRect(hwnd,&r);
 
           SetTextColor(ps.hdc,GetSysColor(COLOR_BTNTEXT));
           SetBkMode(ps.hdc,TRANSPARENT);
@@ -1612,12 +1612,12 @@ static LRESULT WINAPI labelWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
   return DefWindowProc(hwnd,msg,wParam,lParam);
 }
 
-struct __SWELL_ComboBoxInternalState_rec 
-{ 
-  __SWELL_ComboBoxInternalState_rec(const char *_desc=NULL, LPARAM _parm=0) { desc=_desc?strdup(_desc):NULL; parm=_parm; } 
-  ~__SWELL_ComboBoxInternalState_rec() { free(desc); } 
-  char *desc; 
-  LPARAM parm; 
+struct __SWELL_ComboBoxInternalState_rec
+{
+  __SWELL_ComboBoxInternalState_rec(const char *_desc=NULL, LPARAM _parm=0) { desc=_desc?strdup(_desc):NULL; parm=_parm; }
+  ~__SWELL_ComboBoxInternalState_rec() { free(desc); }
+  char *desc;
+  LPARAM parm;
   static int cmp(const __SWELL_ComboBoxInternalState_rec **a, const __SWELL_ComboBoxInternalState_rec **b) { return strcmp((*a)->desc, (*b)->desc); }
 };
 
@@ -1647,7 +1647,7 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
       switch (msg)
       {
         case CB_ADDSTRING:
-          
+
           if (!(hwnd->m_style & CBS_SORT))
           {
             s->items.Add(new __SWELL_ComboBoxInternalState_rec((const char *)lParam));
@@ -1685,8 +1685,8 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
         case CB_GETCOUNT: return s->items.GetSize();
         case CB_GETCURSEL: return s->selidx >=0 && s->selidx < s->items.GetSize() ? s->selidx : -1;
 
-        case CB_GETLBTEXT: 
-          if (wParam < s->items.GetSize()) 
+        case CB_GETLBTEXT:
+          if (wParam < s->items.GetSize())
           {
             if (lParam)
             {
@@ -1722,13 +1722,13 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             }
           }
         case CB_GETITEMDATA:
-          if (wParam < s->items.GetSize()) 
+          if (wParam < s->items.GetSize())
           {
             return s->items.Get(wParam)->parm;
           }
         return CB_ERR;
         case CB_SETITEMDATA:
-          if (wParam < s->items.GetSize()) 
+          if (wParam < s->items.GetSize())
           {
             s->items.Get(wParam)->parm=lParam;
             return 0;
@@ -1766,7 +1766,7 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
     case WM_LBUTTONUP:
       if (GetCapture()==hwnd)
       {
-        ReleaseCapture(); 
+        ReleaseCapture();
         __SWELL_ComboBoxInternalState *s = (__SWELL_ComboBoxInternalState*)GetProp(hwnd,stateName);
         if (s && s->items.GetSize())
         {
@@ -1794,12 +1794,12 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
       }
     return 0;
     case WM_PAINT:
-      { 
+      {
         PAINTSTRUCT ps;
         if (BeginPaint(hwnd,&ps))
         {
-          RECT r; 
-          GetClientRect(hwnd,&r); 
+          RECT r;
+          GetClientRect(hwnd,&r);
           bool pressed = GetCapture()==hwnd;
 
           SetTextColor(ps.hdc,GetSysColor(COLOR_BTNTEXT));
@@ -1835,8 +1835,8 @@ static LRESULT WINAPI comboWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             DeleteObject(pen);
             DeleteObject(pen2);
 
-           
-            if (pressed) 
+
+            if (pressed)
             {
               r.left+=2;
               r.top+=2;
@@ -1912,13 +1912,13 @@ struct listViewState
     m_is_multisel = isMultiSel;
     m_owner_data_size = ownerData ? 0 : -1;
     m_last_row_height = 0;
-  } 
+  }
   ~listViewState()
-  { 
+  {
     m_data.Empty(true);
   }
   WDL_PtrList<SWELL_ListView_Row> m_data;
-  
+
   int GetNumItems() const { return m_owner_data_size>=0 ? m_owner_data_size : m_data.GetSize(); }
   bool IsOwnerData() const { return m_owner_data_size>=0; }
 
@@ -1971,21 +1971,21 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
       }
     return 0;
     case WM_PAINT:
-      { 
+      {
         PAINTSTRUCT ps;
         if (BeginPaint(hwnd,&ps))
         {
-          RECT r; 
-          GetClientRect(hwnd,&r); 
+          RECT r;
+          GetClientRect(hwnd,&r);
           HBRUSH br = CreateSolidBrush(RGB(255,255,255));
           FillRect(ps.hdc,&r,br);
           DeleteObject(br);
           br=CreateSolidBrush(RGB(0,0,255));
-          if (lvs) 
+          if (lvs)
           {
             const bool owner_data = lvs->IsOwnerData();
             const int n = owner_data ? lvs->m_owner_data_size : lvs->m_data.GetSize();
-            TEXTMETRIC tm; 
+            TEXTMETRIC tm;
             GetTextMetrics(ps.hdc,&tm);
             SetBkMode(ps.hdc,TRANSPARENT);
             SetTextColor(ps.hdc,RGB(0,0,0));
@@ -2003,7 +2003,7 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
               else
               {
                 SWELL_ListView_Row *row = lvs->m_data.Get(x);
-                if (row) 
+                if (row)
                 {
                   str = row->m_vals.Get(0);
                   sel = row->m_tmp&1;
@@ -2017,11 +2017,11 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
                 FillRect(ps.hdc,&tr,br);
               }
               // todo: multiple columns too
-              if (str) 
+              if (str)
               {
                 DrawText(ps.hdc,str,-1,&tr,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
               }
-             
+
               ypos += row_height;
             }
           }
@@ -2042,12 +2042,12 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         int rv=lvs->m_data.GetSize();
         SWELL_ListView_Row *row=new SWELL_ListView_Row;
         row->m_vals.Add(strdup((const char *)lParam));
-        lvs->m_data.Add(row); 
+        lvs->m_data.Add(row);
         InvalidateRect(hwnd,NULL,FALSE);
         return rv;
       }
     return LB_ERR;
-     
+
     case LB_INSERTSTRING:
       if (lvs && !lvs->IsOwnerData())
       {
@@ -2055,7 +2055,7 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         if (idx<0 || idx>lvs->m_data.GetSize()) idx=lvs->m_data.GetSize();
         SWELL_ListView_Row *row=new SWELL_ListView_Row;
         row->m_vals.Add(strdup((const char *)lParam));
-        lvs->m_data.Insert(idx,row); 
+        lvs->m_data.Insert(idx,row);
         InvalidateRect(hwnd,NULL,FALSE);
         return idx;
       }
@@ -2102,7 +2102,7 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
           {
             int x;
             const int n=lvs->m_data.GetSize();
-            for(x=0;x<n;x++) 
+            for(x=0;x<n;x++)
             {
               SWELL_ListView_Row *row=lvs->m_data.Get(x);
               if (row) row->m_tmp = (row->m_tmp&~1) | (wParam?1:0);
@@ -2159,7 +2159,7 @@ static LRESULT listViewWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         {
           int x;
           const int n=lvs->m_data.GetSize();
-          for(x=0;x<n;x++) 
+          for(x=0;x<n;x++)
           {
             SWELL_ListView_Row *row=lvs->m_data.Get(x);
             if (row && (row->m_tmp&1)) cnt++;
@@ -3483,7 +3483,7 @@ void SWELL_GenerateDialogFromList(const void *_list, int listsz)
     if (!strcmp(list->str1,"__SWELL_BUTTON"))
     {
       SWELL_MakeButton(list->flag1,list->str2, SIXFROMLIST);
-    } 
+    }
     else if (!strcmp(list->str1,"__SWELL_EDIT"))
     {
       SWELL_MakeEditField(SIXFROMLIST);
